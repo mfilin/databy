@@ -1,0 +1,28 @@
+﻿code: sales.monthly
+title: Продажи за период
+routine:
+  name: reports.fn_sales
+  kind: function
+  timeout_sec: 60
+parameters:
+  - name: p_from
+    type: date
+    label: Дата с
+    required: true
+    default: month_start
+  - name: p_to
+    type: date
+    label: Дата по
+    required: true
+    default: today
+result:
+  sheet: Продажи
+  columns:
+    sold_at: { title: Дата, format: "dd.MM.yyyy" }
+    product: { title: Товар }
+    category: { title: Категория }
+    quantity: { title: Количество, format: "#,##0" }
+    unit_price: { title: Цена, format: "#,##0.00" }
+    total: { title: Сумма, format: "#,##0.00" }
+    region: { title: Регион }
+roles: [admin, user]

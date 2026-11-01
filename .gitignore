@@ -1,0 +1,6 @@
+﻿# Secrets and local overrides
+src/Databy.Reports/appsettings.local.json
+logs/
+.vs/
+**/bin/
+**/obj/
