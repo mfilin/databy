@@ -1,4 +1,6 @@
 ﻿using Avalonia;
+using Databy.Reports.Composition;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Databy.Reports;
 internal sealed class Program

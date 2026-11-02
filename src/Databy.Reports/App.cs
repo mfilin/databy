@@ -1,13 +1,18 @@
 ﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Markup.Xaml;
 using Avalonia.Controls;
 using Avalonia.Themes.Fluent;
 using Avalonia.Markup.Xaml.Styling;
+using Databy.Reports.Composition;
+using Databy.Reports.ViewModels;
+using Databy.Reports.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Databy.Reports;
 public sealed class App : Application
 {
+    public IServiceProvider Services { get; private set; } = null!;
+
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
@@ -19,7 +24,11 @@ public sealed class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow();
+        {
+            Services = ServiceRegistration.BuildServiceProvider();
+            var viewModel = Services.GetRequiredService<MainWindowViewModel>();
+            desktop.MainWindow = new MainWindow { DataContext = viewModel };
+        }
         base.OnFrameworkInitializationCompleted();
     }
 }

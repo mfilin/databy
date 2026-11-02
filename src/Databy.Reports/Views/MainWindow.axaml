@@ -1,0 +1,208 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Databy.Reports.ViewModels"
+        x:Class="Databy.Reports.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Отчётность"
+        Width="1360" Height="820" MinWidth="1024" MinHeight="620"
+        Background="#F4F7FB"
+        WindowStartupLocation="CenterScreen">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Surface">#FFFFFF</SolidColorBrush>
+    <SolidColorBrush x:Key="SurfaceMuted">#F7F9FC</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderColor">#E3EAF3</SolidColorBrush>
+    <SolidColorBrush x:Key="Primary">#2F80ED</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimarySoft">#EAF2FE</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentActive">#E5484D</SolidColorBrush>
+    <SolidColorBrush x:Key="TextPrimary">#1F2A37</SolidColorBrush>
+    <SolidColorBrush x:Key="TextMuted">#7A8899</SolidColorBrush>
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource PrimarySoft}" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource Primary}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Padding" Value="16,7" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.pager">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="7,3" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.pager:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource PrimarySoft}" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="64,*,34">
+    <!-- HEADER -->
+    <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,0">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Width="34" Height="34" CornerRadius="8" Background="{StaticResource Primary}">
+            <TextBlock Text="D" Foreground="White" FontWeight="Bold" FontSize="18"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Databy Reports" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+            <TextBlock Text="Отчётность" FontSize="11" Foreground="{StaticResource TextMuted}" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <TextBlock Text="Период" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+          <CalendarDatePicker SelectedDate="{Binding FromDate, Mode=TwoWay}" Width="170"
+                              Watermark="Начало периода" HorizontalContentAlignment="Left" />
+          <TextBlock Text="—" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+          <CalendarDatePicker SelectedDate="{Binding ToDate, Mode=TwoWay}" Width="170"
+                              Watermark="Конец периода" HorizontalContentAlignment="Left" />
+          <Button Classes="primary" Command="{Binding RunCommand}" Content="Обновить" Margin="8,0,0,0" />
+          <Button Classes="tool" Command="{Binding CancelCommand}" Content="Отмена" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Classes="tool" Command="{Binding ExportCommand}" Content="Экспорт" />
+          <Button Classes="tool" Command="{Binding ReloadCatalogCommand}" Content="Перечитать каталог" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- BODY -->
+    <Grid Grid.Row="1" ColumnDefinitions="240,*,250" Margin="14">
+      <!-- LEFT SIDEBAR -->
+      <Border Grid.Column="0" Background="{StaticResource Surface}" CornerRadius="10"
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Margin="0,0,12,0">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Text="Каталог отчётов" FontWeight="SemiBold" FontSize="13" Margin="16,14,16,8"
+                     Foreground="{StaticResource TextPrimary}" />
+          <TreeView Grid.Row="1" ItemsSource="{Binding Catalog}" Background="Transparent" Margin="6,0" SelectionChanged="OnTreeSelectionChanged">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate DataType="vm:CatalogNode" ItemsSource="{Binding Children}">
+                <Border CornerRadius="6" Padding="8,6">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Icon}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+          <Border Grid.Row="2" Height="120" Margin="12" CornerRadius="8" Background="{StaticResource PrimarySoft}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="4">
+              <TextBlock Text="&#x1F465;" FontSize="34" HorizontalAlignment="Center" />
+              <TextBlock Text="Команда" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- CENTER CONTENT -->
+      <Border Grid.Column="1" Background="{StaticResource Surface}" CornerRadius="10"
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1">
+        
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+          
+          <TabControl Grid.Row="0" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                      Background="Transparent" Padding="0">
+            <TabControl.ItemTemplate>
+              <DataTemplate DataType="vm:ReportTabViewModel">
+                <TextBlock Text="{Binding Title}" />
+              </DataTemplate>
+            </TabControl.ItemTemplate>
+          </TabControl>
+
+          <Border Grid.Row="1" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,1" Padding="10,6">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Button Classes="tool" Command="{Binding RunCommand}" Content="Обновить" />
+              <Button Classes="tool" Command="{Binding ExportCommand}" Content="Экспорт" />
+              <Button Classes="tool" Command="{Binding FirstPageCommand}" Content="⏮" />
+              <Button Classes="tool" Command="{Binding PreviousPageCommand}" Content="◀" />
+              <Button Classes="tool" Command="{Binding NextPageCommand}" Content="▶" />
+              <Button Classes="tool" Command="{Binding LastPageCommand}" Content="⏭" />
+              <TextBlock Text="{Binding TotalCaption}" VerticalAlignment="Center" Margin="12,0,0,0"
+                         Foreground="{StaticResource TextMuted}" />
+            </StackPanel>
+          </Border>
+
+          <Grid Grid.Row="2">
+            <DataGrid Name="resultsGrid" ItemsSource="{Binding SelectedTab.Rows, Mode=OneWay}" AutoGenerateColumns="False" IsReadOnly="True"
+                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserSortColumns="True"
+                      CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserHideColumns="True"
+                      SelectionMode="Extended" ClipboardCopyMode="IncludeHeader"
+                      RowHeight="32" ColumnHeaderHeight="36" RowBackground="#FFFFFF"
+                      Background="Transparent" BorderThickness="0" IsVisible="{Binding HasData}" />
+            <StackPanel IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+              <TextBlock Text="&#x1F4C4;" FontSize="40" HorizontalAlignment="Center" />
+              <TextBlock Text="{Binding EmptyMessage}" Foreground="{StaticResource TextMuted}" FontSize="14"
+                         HorizontalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+
+          <Border Grid.Row="3" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0" Padding="12,8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding TotalCaption}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <Button Classes="pager" Command="{Binding FirstPageCommand}" Content="«" />
+                <Button Classes="pager" Command="{Binding PreviousPageCommand}" Content="‹" />
+                <TextBlock Text="{Binding PageCaption}" VerticalAlignment="Center" Margin="8,0" />
+                <Button Classes="pager" Command="{Binding NextPageCommand}" Content="›" />
+                <Button Classes="pager" Command="{Binding LastPageCommand}" Content="»" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- RIGHT SIDEBAR -->
+      <Border Grid.Column="2" Background="{StaticResource Surface}" CornerRadius="10"
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Margin="12,0,0,0">
+        <StackPanel Spacing="14" Margin="16">
+          <TextBlock Text="Фильтр" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+          <StackPanel Spacing="4">
+            <TextBlock Text="Дата с" Classes="caption" />
+            <CalendarDatePicker SelectedDate="{Binding FilterFromDate, Mode=TwoWay}"
+                                Watermark="Выберите дату" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="Дата по" Classes="caption" />
+            <CalendarDatePicker SelectedDate="{Binding FilterToDate, Mode=TwoWay}"
+                                Watermark="Выберите дату" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="Отчёт" Classes="caption" />
+            <ComboBox ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                      DisplayMemberBinding="{Binding Title}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+          <Button Classes="primary" Command="{Binding RunCommand}" Content="Применить" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- STATUS BAR -->
+    <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto" Margin="16,0">
+        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource TextMuted}" />
+        <TextBlock Grid.Column="1" Text="{Binding CatalogVersion, StringFormat='Каталог v{0}'}"
+                   VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource TextMuted}" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

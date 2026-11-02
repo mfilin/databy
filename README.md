@@ -19,9 +19,18 @@
 - `tests/Tests.Integration` — PostgreSQL Testcontainers (T2).
 - команды и покрытие: [tests/README.md](tests/README.md).
 
+## Архитектура
+
+Приложение использует MVVM и внедрение зависимостей (`Microsoft.Extensions.DependencyInjection`).
+
+- `src/Databy.Reports/Composition/ServiceRegistration.cs` — регистрация сервисов и ViewModel.
+- `src/Databy.Reports/Services/` — конфигурация, каталог, PostgreSQL-запросы, экспорт, диалоги (`IApplicationSettings`, `IReportCatalogService`, `IReportQueryService`, `IReportExportService`, `IFileDialogService`).
+- `src/Databy.Reports/ViewModels/` — `MainWindowViewModel`, `ReportTabViewModel`, `CatalogNode`, `ReportColumnViewModel` на `CommunityToolkit.Mvvm`.
+- `src/Databy.Reports/Views/MainWindow.axaml` — светлый интерфейс: Header, Body (левое дерево каталога, вкладки и таблица с пагинацией, правая панель фильтров), StatusBar.
+
 ## Состав
 
-- `src/Databy.Reports` — Avalonia UI, загрузчик каталога и экспорт XLSX/CSV.
+- `src/Databy.Reports` — Avalonia UI, сервисы каталога/БД/экспорта и MVVM-слой.
 - `catalog/` — YAML-каталог и демо-отчёт.
 - `db/demo.sql` — таблица, тестовые продажи и функция отчёта.
 - `tests/db/init.sql` — синтетическая схема и функции для интеграционных тестов.
