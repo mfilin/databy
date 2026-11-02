@@ -1,0 +1,88 @@
+using System.Data;
+using Databy.Reports.Catalog;
+using Databy.Reports.Export;
+using Databy.Reports.Services;
+using Databy.Reports.ViewModels;
+
+namespace Tests.Unit;
+
+[Trait("Category", "T1")]
+public sealed class DefaultPeriodTests
+{
+    [Fact]
+    public void Dp01_PeriodUsesReportDefaultParameters()
+    {
+        using var viewModel = CreateViewModel(new ParameterDefinition { Name = "p_from", Type = "date", Default = "2026-01-01" },
+            new ParameterDefinition { Name = "p_to", Type = "date", Default = "2026-03-31" });
+
+        Assert.Equal(new DateTimeOffset(new DateTime(2026, 1, 1)), viewModel.FromDate);
+        Assert.Equal(new DateTimeOffset(new DateTime(2026, 3, 31)), viewModel.ToDate);
+        Assert.Equal(viewModel.FromDate, viewModel.FilterFromDate);
+        Assert.Equal(viewModel.ToDate, viewModel.FilterToDate);
+    }
+
+    [Fact]
+    public void Dp02_PeriodFallsBackToCurrentMonthWhenNoDefaults()
+    {
+        using var viewModel = CreateViewModel(new ParameterDefinition { Name = "p_from", Type = "date" },
+            new ParameterDefinition { Name = "p_to", Type = "date" });
+
+        var today = DateTime.Today;
+        Assert.Equal(new DateTimeOffset(new DateTime(today.Year, today.Month, 1)), viewModel.FromDate);
+        Assert.Equal(today, viewModel.ToDate!.Value.Date);
+    }
+
+    [Fact]
+    public async Task Dp03_RunSendsSelectedPeriodToQuery()
+    {
+        ReportFilter? received = null;
+        using var viewModel = CreateViewModel(
+            new ParameterDefinition { Name = "p_from", Type = "date" },
+            new ParameterDefinition { Name = "p_to", Type = "date" },
+            filter => received = filter);
+
+        viewModel.SetPeriod(new DateTimeOffset(new DateTime(2026, 10, 1)), new DateTimeOffset(new DateTime(2026, 10, 31)));
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        Assert.NotNull(received);
+        Assert.Equal(new DateOnly(2026, 10, 1), received!.From);
+        Assert.Equal(new DateOnly(2026, 10, 31), received.To);
+        Assert.True(viewModel.HasData);
+    }
+
+    private static MainWindowViewModel CreateViewModel(ParameterDefinition from, ParameterDefinition to, Action<ReportFilter>? onQuery = null)
+    {
+        var definition = new ReportDefinition
+        {
+            Code = "sales.monthly",
+            Title = "Продажи",
+            Routine = new RoutineDefinition { Name = "reports.fn_sales" },
+            Parameters = [from, to],
+            Result = new ResultDefinition()
+        };
+        return new MainWindowViewModel(new StubCatalog(definition), new StubQuery(onQuery), new StubExport());
+    }
+
+    private sealed class StubCatalog(ReportDefinition report) : IReportCatalogService
+    {
+        public ReportCatalog Load() => new("1.0", [report], [], ["sales"]);
+    }
+
+    private sealed class StubQuery(Action<ReportFilter>? onQuery) : IReportQueryService
+    {
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, ReportFilter filter, CancellationToken cancellationToken = default)
+        {
+            onQuery?.Invoke(filter);
+            var table = new DataTable();
+            table.Columns.Add("amount", typeof(decimal));
+            table.Rows.Add(1m);
+            return Task.FromResult(new ReportQueryResult(new ReportPreview(table, 1), new TemporaryCsvStage(), 1));
+        }
+    }
+
+    private sealed class StubExport : IReportExportService
+    {
+        public ExportResult Save(ReportQueryResult result, ReportDefinition report, string targetPath) =>
+            new(targetPath, "CSV", result.RowCount, false);
+    }
+}
