@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
-    <BaseOutputPath>$(RepoRoot)build\$(MSBuildProjectName)\</BaseOutputPath>
+    <BuildRoot>$(RepoRoot)build/$(MSBuildProjectName)/</BuildRoot>
+    <BaseOutputPath>$(BuildRoot)</BaseOutputPath>
   </PropertyGroup>
 </Project>

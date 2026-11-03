@@ -9,9 +9,10 @@
 3. Установите .NET 8 SDK.
 4. Соберите и запустите:
    - `dotnet build Databy.Reports.sln`
-   - `build\Databy.Reports\Debug\net8.0\Databy.Reports.exe`
+   - Windows: `build\Databy.Reports\Debug\net8.0\Databy.Reports.exe`
+   - Linux/macOS: `./build/Databy.Reports/Debug/net8.0/Databy.Reports`
 
-Все проекты собираются в корневую папку `build\<ИмяПроекта>\` (настраивается в `Directory.Build.props`), поэтому исполняемые файлы всегда лежат в одном месте:
+Все проекты собираются в корневую папку `build/<ИмяПроекта>/` (настраивается в `Directory.Build.props`, пути кроссплатформенные), поэтому исполняемые файлы всегда в одном месте. Запуск без хардкода пути тоже доступен через `dotnet run --project src/Databy.Reports`.
 
 Подключение читается из локального `src/Databy.Reports/appsettings.local.json` или переменной `DATABY_CONNECTION`. Локальный файл исключён из Git.
 
