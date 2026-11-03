@@ -229,6 +229,19 @@
               <TextBlock Text="{Binding EmptyMessage}" Foreground="{StaticResource TextMuted}" FontSize="14"
                          HorizontalAlignment="Center" />
             </StackPanel>
+
+            <Border IsVisible="{Binding IsBusy}" Background="#66000000">
+              <Border Background="{StaticResource Surface}" CornerRadius="8" Padding="32,14"
+                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                      BorderBrush="{StaticResource BorderColor}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                  <ProgressBar IsIndeterminate="True" Width="90" Height="4" VerticalAlignment="Center"
+                               Foreground="{StaticResource Primary}" />
+                  <TextBlock FontSize="15" FontWeight="SemiBold"
+                             Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center">&gt;&gt;&gt;ЗАГРУЗКА ДАННЫХ&lt;&lt;&lt;</TextBlock>
+                </StackPanel>
+              </Border>
+            </Border>
           </Grid>
 
           <Border Grid.Row="3" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0" Padding="12,8">

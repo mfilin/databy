@@ -10,6 +10,7 @@ namespace Databy.Reports.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     public const int PageSize = 100;
+    public static TimeSpan MinimumLoadingTime { get; set; } = TimeSpan.FromSeconds(2);
     private readonly IReportCatalogService _catalogService;
     private readonly IReportQueryService _queryService;
     private readonly IReportExportService _exportService;
@@ -176,6 +177,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         NotifyLayoutChanged();
     }
 
+    private static async Task EnsureMinimumLoadingTimeAsync(DateTimeOffset startedAt, CancellationToken cancellationToken)
+    {
+        var remaining = MinimumLoadingTime - (DateTimeOffset.UtcNow - startedAt);
+        if (remaining > TimeSpan.Zero)
+            await Task.Delay(remaining, cancellationToken);
+    }
+
     private ReportFilter BuildFilter()
     {
         var from = (FilterFromDate ?? FromDate ?? DefaultFrom()).Date;
@@ -192,9 +200,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _runCts = new CancellationTokenSource();
         IsBusy = true;
         Status = "Выполняется запрос…";
+        var startedAt = DateTimeOffset.UtcNow;
         try
         {
             var result = await _queryService.ExecuteAsync(tab.Definition, BuildFilter(), _runCts.Token);
+            await EnsureMinimumLoadingTimeAsync(startedAt, _runCts.Token);
             tab.Apply(result);
             Page = 0;
             Status = $"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
