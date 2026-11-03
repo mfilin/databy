@@ -4,3 +4,4 @@ logs/
 .vs/
 **/bin/
 **/obj/
+build/

@@ -1,8 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Databy.Reports.ViewModels"
+        xmlns:views="using:Databy.Reports.Views"
+        xmlns:local="using:Databy.Reports.Converters"
         x:Class="Databy.Reports.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
         Title="Отчётность"
         Width="1360" Height="820" MinWidth="1024" MinHeight="620"
         Background="#F4F7FB"
@@ -16,9 +17,31 @@
     <SolidColorBrush x:Key="AccentActive">#E5484D</SolidColorBrush>
     <SolidColorBrush x:Key="TextPrimary">#1F2A37</SolidColorBrush>
     <SolidColorBrush x:Key="TextMuted">#7A8899</SolidColorBrush>
+    <local:DateTimeOffsetToDateTimeConverter x:Key="DtoToDtConverter" />
   </Window.Resources>
 
   <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="CalendarDatePicker /template/ TextBox">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="CalendarDatePicker /template/ Button">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="CalendarDatePicker /template/ Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource PrimarySoft}" />
+    </Style>
+    <Style Selector="Calendar /template/ Button">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Calendar /template/ Button#PART_Button">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="TreeViewItem">
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
     <Style Selector="TextBlock.caption">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
@@ -50,6 +73,22 @@
     <Style Selector="Button.pager:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource PrimarySoft}" />
     </Style>
+    <Style Selector="Button.tabClose">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Button.tabClose:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FDE8E8" />
+      <Setter Property="TextElement.Foreground" Value="#B42318" />
+    </Style>
   </Window.Styles>
 
   <Grid RowDefinitions="64,*,34">
@@ -68,12 +107,8 @@
         </StackPanel>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
-          <TextBlock Text="Период" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
-          <CalendarDatePicker SelectedDate="{Binding FromDate, Mode=TwoWay}" Width="170"
-                              Watermark="Начало периода" HorizontalContentAlignment="Left" />
-          <TextBlock Text="—" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" />
-          <CalendarDatePicker SelectedDate="{Binding ToDate, Mode=TwoWay}" Width="170"
-                              Watermark="Конец периода" HorizontalContentAlignment="Left" />
+          <TextBlock Text="{Binding SelectedTab.Title, TargetNullValue='Отчёт не выбран'}"
+                     VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" />
           <Button Classes="primary" Command="{Binding RunCommand}" Content="Обновить" Margin="8,0,0,0" />
           <Button Classes="tool" Command="{Binding CancelCommand}" Content="Отмена" />
         </StackPanel>
@@ -86,20 +121,28 @@
     </Border>
 
     <!-- BODY -->
-    <Grid Grid.Row="1" ColumnDefinitions="240,*,250" Margin="14">
+    <Grid Grid.Row="1" Margin="14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="260" MinWidth="180" MaxWidth="560" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="*" MinWidth="320" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="280" MinWidth="200" MaxWidth="520" />
+      </Grid.ColumnDefinitions>
+
       <!-- LEFT SIDEBAR -->
       <Border Grid.Column="0" Background="{StaticResource Surface}" CornerRadius="10"
-              BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Margin="0,0,12,0">
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1">
         <Grid RowDefinitions="Auto,*,Auto">
           <TextBlock Text="Каталог отчётов" FontWeight="SemiBold" FontSize="13" Margin="16,14,16,8"
                      Foreground="{StaticResource TextPrimary}" />
-          <TreeView Grid.Row="1" ItemsSource="{Binding Catalog}" Background="Transparent" Margin="6,0" SelectionChanged="OnTreeSelectionChanged">
+          <TreeView Grid.Row="1" ItemsSource="{Binding Catalog}" Background="Transparent" Margin="6,0" DoubleTapped="OnTreeDoubleTapped">
             <TreeView.ItemTemplate>
               <TreeDataTemplate DataType="vm:CatalogNode" ItemsSource="{Binding Children}">
                 <Border CornerRadius="6" Padding="8,6">
                   <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding Icon}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Icon}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}" />
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Foreground="{StaticResource TextPrimary}" />
                   </StackPanel>
                 </Border>
               </TreeDataTemplate>
@@ -114,17 +157,44 @@
         </Grid>
       </Border>
 
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                    Background="{StaticResource BorderColor}" HorizontalAlignment="Stretch"
+                    Width="8" Cursor="SizeWestEast" />
+
       <!-- CENTER CONTENT -->
-      <Border Grid.Column="1" Background="{StaticResource Surface}" CornerRadius="10"
-              BorderBrush="{StaticResource BorderColor}" BorderThickness="1">
+      <Border Grid.Column="2" Background="{StaticResource Surface}" CornerRadius="10"
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
+              IsVisible="{Binding IsReportSelected}">
         <Grid RowDefinitions="Auto,Auto,*,Auto">
           <TabControl Grid.Row="0" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
                       Background="Transparent" Padding="0">
             <TabControl.ItemTemplate>
               <DataTemplate DataType="vm:ReportTabViewModel">
-                <TextBlock Text="{Binding Title}" />
+                <StackPanel Orientation="Horizontal" Spacing="6" DoubleTapped="OnTabDoubleTapped">
+                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                  <Button Classes="tabClose" Content="✕" Click="OnTabCloseClick"
+                          ToolTip.Tip="Закрыть вкладку" />
+                </StackPanel>
               </DataTemplate>
             </TabControl.ItemTemplate>
+            <TabControl.ContentTemplate>
+              <DataTemplate DataType="vm:ReportTabViewModel">
+                <Panel />
+              </DataTemplate>
+            </TabControl.ContentTemplate>
+            <TabControl.ItemContainerTheme>
+              <ControlTheme TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                <Setter Property="ContextMenu">
+                  <Template>
+                    <ContextMenu>
+                      <MenuItem Header="Закрыть" Click="OnCloseTabMenuClick" />
+                      <MenuItem Header="Закрыть остальные" Click="OnCloseOtherTabsMenuClick" />
+                      <MenuItem Header="Закрыть все" Click="OnCloseAllTabsMenuClick" />
+                    </ContextMenu>
+                  </Template>
+                </Setter>
+              </ControlTheme>
+            </TabControl.ItemContainerTheme>
           </TabControl>
 
           <Border Grid.Row="1" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,1" Padding="10,6">
@@ -141,12 +211,19 @@
           </Border>
 
           <Grid Grid.Row="2">
-            <DataGrid Name="resultsGrid" ItemsSource="{Binding SelectedTab.Rows, Mode=OneWay}" AutoGenerateColumns="False" IsReadOnly="True"
-                      GridLinesVisibility="Horizontal" HeadersVisibility="Column" CanUserSortColumns="True"
-                      CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserHideColumns="True"
-                      SelectionMode="Extended" ClipboardCopyMode="IncludeHeader"
-                      RowHeight="32" ColumnHeaderHeight="36" RowBackground="#FFFFFF"
-                      Background="Transparent" BorderThickness="0" IsVisible="{Binding HasData}" />
+            <views:TableView Name="resultsTable"
+                             IsVisible="{Binding HasData}"
+                             ColumnsSource="{Binding SelectedTab.TableColumns}"
+                             RowsSource="{Binding SelectedTab.TableRows}">
+              <views:TableView.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="Padding" Value="0" />
+                  <Setter Property="MinHeight" Value="32" />
+                  <Setter Property="CornerRadius" Value="0" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+              </views:TableView.Styles>
+            </views:TableView>
             <StackPanel IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
               <TextBlock Text="&#x1F4C4;" FontSize="40" HorizontalAlignment="Center" />
               <TextBlock Text="{Binding EmptyMessage}" Foreground="{StaticResource TextMuted}" FontSize="14"
@@ -169,25 +246,26 @@
         </Grid>
       </Border>
 
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                    Background="{StaticResource BorderColor}" HorizontalAlignment="Stretch"
+                    Width="8" Cursor="SizeWestEast" />
+
       <!-- RIGHT SIDEBAR -->
-      <Border Grid.Column="2" Background="{StaticResource Surface}" CornerRadius="10"
-              BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Margin="12,0,0,0">
+      <Border Grid.Column="4" Background="{StaticResource Surface}" CornerRadius="10"
+              BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
+              IsVisible="{Binding IsReportSelected}">
         <StackPanel Spacing="14" Margin="16">
           <TextBlock Text="Фильтр" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+          <TextBlock Text="{Binding SelectedTab.Title}" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" />
           <StackPanel Spacing="4">
             <TextBlock Text="Дата с" Classes="caption" />
-            <CalendarDatePicker SelectedDate="{Binding FilterFromDate, Mode=TwoWay}"
+            <CalendarDatePicker SelectedDate="{Binding FilterFromDate, Converter={StaticResource DtoToDtConverter}, Mode=TwoWay}"
                                 Watermark="Выберите дату" HorizontalAlignment="Stretch" />
           </StackPanel>
           <StackPanel Spacing="4">
             <TextBlock Text="Дата по" Classes="caption" />
-            <CalendarDatePicker SelectedDate="{Binding FilterToDate, Mode=TwoWay}"
+            <CalendarDatePicker SelectedDate="{Binding FilterToDate, Converter={StaticResource DtoToDtConverter}, Mode=TwoWay}"
                                 Watermark="Выберите дату" HorizontalAlignment="Stretch" />
-          </StackPanel>
-          <StackPanel Spacing="4">
-            <TextBlock Text="Отчёт" Classes="caption" />
-            <ComboBox ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
-                      DisplayMemberBinding="{Binding Title}" HorizontalAlignment="Stretch" />
           </StackPanel>
           <Button Classes="primary" Command="{Binding RunCommand}" Content="Применить" HorizontalAlignment="Stretch" />
         </StackPanel>

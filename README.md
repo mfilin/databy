@@ -7,7 +7,11 @@
 1. Запустите PostgreSQL на `localhost:5432`.
 2. Если база пустая, примените демо DDL: `psql -h localhost -U db1 -d db1 -f db/demo.sql` (скрипт пересоздаёт только демонстрационные строки `reports.demo_sales`). В текущем окружении данные уже загружены в контейнер `local-postgres`, база `db1`.
 3. Установите .NET 8 SDK.
-4. Запустите `dotnet run --project src/Databy.Reports`.
+4. Соберите и запустите:
+   - `dotnet build Databy.Reports.sln`
+   - `build\Databy.Reports\Debug\net8.0\Databy.Reports.exe`
+
+Все проекты собираются в корневую папку `build\<ИмяПроекта>\` (настраивается в `Directory.Build.props`), поэтому исполняемые файлы всегда лежат в одном месте:
 
 Подключение читается из локального `src/Databy.Reports/appsettings.local.json` или переменной `DATABY_CONNECTION`. Локальный файл исключён из Git.
 

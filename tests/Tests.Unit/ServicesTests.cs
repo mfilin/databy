@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Databy.Reports.Catalog;
 using Databy.Reports.Export;
 using Databy.Reports.Services;
@@ -9,19 +9,24 @@ namespace Tests.Unit;
 [Trait("Category", "T1")]
 public sealed class MainWindowViewModelTests
 {
+    
+
     [Fact]
-    public void Vm01_BuildsCatalogTreeAndSelectsFirstReport()
+    public void Vm01_BuildsCatalogTreeWithoutAutoOpeningReport()
     {
         var viewModel = CreateViewModel();
         try
         {
-            var root = Assert.Single(viewModel.Catalog);
-            Assert.True(root.IsFolder);
-            var folder = Assert.Single(root.Children);
+            var folder = Assert.Single(viewModel.Catalog);
             Assert.Equal("sales", folder.Title);
             Assert.True(folder.IsFolder);
-            Assert.False(folder.Children[0].IsFolder);
-            Assert.Equal("sales.monthly", viewModel.SelectedTab?.Code);
+            var reportNode = Assert.Single(folder.Children);
+            Assert.False(reportNode.IsFolder);
+            Assert.NotNull(reportNode.Report);
+
+            Assert.Null(viewModel.SelectedTab);
+            Assert.Empty(viewModel.Tabs);
+            Assert.False(viewModel.IsReportSelected);
             Assert.Equal("2.0", viewModel.CatalogVersion);
             Assert.False(viewModel.CanExport);
         }
@@ -34,8 +39,9 @@ public sealed class MainWindowViewModelTests
         var viewModel = CreateViewModel();
         try
         {
-            var definition = viewModel.SelectedTab!.Definition;
+            var definition = FirstReport(viewModel);
             var first = viewModel.OpenReport(definition);
+            Assert.True(viewModel.IsReportSelected);
             var second = viewModel.OpenReport(definition);
             Assert.Same(first, second);
             Assert.Single(viewModel.Tabs);
@@ -49,6 +55,7 @@ public sealed class MainWindowViewModelTests
         var viewModel = CreateViewModel();
         try
         {
+            viewModel.OpenReport(FirstReport(viewModel));
             await viewModel.RunCommand.ExecuteAsync(null);
             Assert.True(viewModel.HasData);
             Assert.False(viewModel.CanGoForward);
@@ -66,6 +73,7 @@ public sealed class MainWindowViewModelTests
         var viewModel = CreateViewModel(rowCount: MainWindowViewModel.PageSize * 2 + 5);
         try
         {
+            viewModel.OpenReport(FirstReport(viewModel));
             await viewModel.RunCommand.ExecuteAsync(null);
             Assert.Equal(3, viewModel.PageCount);
             Assert.True(viewModel.CanGoForward);
@@ -92,6 +100,7 @@ public sealed class MainWindowViewModelTests
         var viewModel = CreateViewModel();
         try
         {
+            viewModel.OpenReport(FirstReport(viewModel));
             viewModel.SetPeriod(new DateTimeOffset(new DateTime(2026, 5, 10)), new DateTimeOffset(new DateTime(2026, 5, 1)));
             await viewModel.RunCommand.ExecuteAsync(null);
             Assert.Contains("не может быть раньше", viewModel.Status);
@@ -99,6 +108,84 @@ public sealed class MainWindowViewModelTests
         }
         finally { viewModel.Dispose(); }
     }
+
+    [Fact]
+    public void Vm06_CatalogFoldersFromYamlAreUsedForTree()
+    {
+        var viewModel = CreateViewModel();
+        try
+        {
+            Assert.Equal("sales", Assert.Single(viewModel.Catalog).Title);
+            Assert.Equal("sales.monthly", viewModel.Catalog[0].Children[0].ReportCode);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    [Fact]
+    public void Vm07_CloseTabSelectsNeighbourAndClearsSelectionWhenEmpty()
+    {
+        var viewModel = CreateViewModel();
+        try
+        {
+            var definition = FirstReport(viewModel);
+            var first = viewModel.OpenReport(definition);
+            var second = viewModel.OpenReport(new ReportDefinition
+            {
+                Code = "leaders.sales",
+                Title = "Лидеры продаж",
+                Routine = new RoutineDefinition { Name = "reports.fn_sales_leaders" },
+                Parameters = definition.Parameters,
+                Result = new ResultDefinition()
+            });
+            Assert.Equal(2, viewModel.Tabs.Count);
+
+            viewModel.CloseTab(second);
+            Assert.Same(first, viewModel.SelectedTab);
+            Assert.True(viewModel.IsReportSelected);
+
+            viewModel.CloseTab(first);
+            Assert.Empty(viewModel.Tabs);
+            Assert.Null(viewModel.SelectedTab);
+            Assert.False(viewModel.IsReportSelected);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    [Fact]
+    public void Vm08_CloseOtherTabsKeepsOnlyGivenTab()
+    {
+        var viewModel = CreateViewModel();
+        try
+        {
+            var definition = FirstReport(viewModel);
+            var first = viewModel.OpenReport(definition);
+            viewModel.OpenReport(new ReportDefinition
+            {
+                Code = "leaders.sales",
+                Title = "Лидеры продаж",
+                Routine = new RoutineDefinition { Name = "reports.fn_sales_leaders" },
+                Parameters = definition.Parameters,
+                Result = new ResultDefinition()
+            });
+            viewModel.OpenReport(new ReportDefinition
+            {
+                Code = "leaders.city",
+                Title = "Лидеры города-продаж",
+                Routine = new RoutineDefinition { Name = "reports.fn_city_sales_leaders" },
+                Parameters = definition.Parameters,
+                Result = new ResultDefinition()
+            });
+            Assert.Equal(3, viewModel.Tabs.Count);
+
+            viewModel.CloseOtherTabs(first);
+            Assert.Same(first, Assert.Single(viewModel.Tabs));
+            Assert.Same(first, viewModel.SelectedTab);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    internal static ReportDefinition FirstReport(MainWindowViewModel viewModel) =>
+        viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!;
 
     internal static MainWindowViewModel CreateViewModel(int rowCount = 2) =>
         new(new StubCatalog(), new StubQuery(rowCount), new StubExport());

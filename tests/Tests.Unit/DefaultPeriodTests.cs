@@ -14,6 +14,7 @@ public sealed class DefaultPeriodTests
     {
         using var viewModel = CreateViewModel(new ParameterDefinition { Name = "p_from", Type = "date", Default = "2026-01-01" },
             new ParameterDefinition { Name = "p_to", Type = "date", Default = "2026-03-31" });
+        OpenFirstReport(viewModel);
 
         Assert.Equal(new DateTimeOffset(new DateTime(2026, 1, 1)), viewModel.FromDate);
         Assert.Equal(new DateTimeOffset(new DateTime(2026, 3, 31)), viewModel.ToDate);
@@ -26,6 +27,7 @@ public sealed class DefaultPeriodTests
     {
         using var viewModel = CreateViewModel(new ParameterDefinition { Name = "p_from", Type = "date" },
             new ParameterDefinition { Name = "p_to", Type = "date" });
+        OpenFirstReport(viewModel);
 
         var today = DateTime.Today;
         Assert.Equal(new DateTimeOffset(new DateTime(today.Year, today.Month, 1)), viewModel.FromDate);
@@ -40,6 +42,7 @@ public sealed class DefaultPeriodTests
             new ParameterDefinition { Name = "p_from", Type = "date" },
             new ParameterDefinition { Name = "p_to", Type = "date" },
             filter => received = filter);
+        OpenFirstReport(viewModel);
 
         viewModel.SetPeriod(new DateTimeOffset(new DateTime(2026, 10, 1)), new DateTimeOffset(new DateTime(2026, 10, 31)));
         await viewModel.RunCommand.ExecuteAsync(null);
@@ -47,8 +50,12 @@ public sealed class DefaultPeriodTests
         Assert.NotNull(received);
         Assert.Equal(new DateOnly(2026, 10, 1), received!.From);
         Assert.Equal(new DateOnly(2026, 10, 31), received.To);
-        Assert.True(viewModel.HasData);
+        Assert.Single(viewModel.SelectedTab!.TableRows, row => !row.IsHeader);
+        Assert.Equal(1, viewModel.SelectedTab!.PreviewRows);
     }
+
+    private static void OpenFirstReport(MainWindowViewModel viewModel) =>
+        viewModel.OpenReport(viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!);
 
     private static MainWindowViewModel CreateViewModel(ParameterDefinition from, ParameterDefinition to, Action<ReportFilter>? onQuery = null)
     {
@@ -58,7 +65,7 @@ public sealed class DefaultPeriodTests
             Title = "Продажи",
             Routine = new RoutineDefinition { Name = "reports.fn_sales" },
             Parameters = [from, to],
-            Result = new ResultDefinition()
+            Result = new ResultDefinition { Columns = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase) { ["amount"] = new() { Title = "Сумма" } } }
         };
         return new MainWindowViewModel(new StubCatalog(definition), new StubQuery(onQuery), new StubExport());
     }

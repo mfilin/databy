@@ -16,3 +16,23 @@ LANGUAGE sql STABLE AS $$
  SELECT s.sold_at,s.product,s.category,s.quantity,s.unit_price,(s.quantity*s.unit_price)::numeric(14,2),s.region
  FROM reports.demo_sales s WHERE s.sold_at BETWEEN p_from AND p_to ORDER BY s.sold_at,s.product
 $$;
+
+CREATE OR REPLACE FUNCTION reports.fn_sales_leaders(p_from date, p_to date)
+RETURNS TABLE(product text, category text, quantity bigint, revenue numeric, deals bigint)
+LANGUAGE sql STABLE AS $$
+ SELECT s.product, s.category, sum(s.quantity)::bigint,
+        sum(s.quantity*s.unit_price)::numeric(14,2), count(*)::bigint
+ FROM reports.demo_sales s WHERE s.sold_at BETWEEN p_from AND p_to
+ GROUP BY s.product, s.category
+ ORDER BY sum(s.quantity*s.unit_price) DESC, s.product
+$$;
+
+CREATE OR REPLACE FUNCTION reports.fn_city_sales_leaders(p_from date, p_to date)
+RETURNS TABLE(region text, quantity bigint, revenue numeric, deals bigint, top_product text)
+LANGUAGE sql STABLE AS $$
+ SELECT s.region, sum(s.quantity)::bigint, sum(s.quantity*s.unit_price)::numeric(14,2), count(*)::bigint,
+        (array_agg(s.product ORDER BY s.quantity*s.unit_price DESC))[1]
+ FROM reports.demo_sales s WHERE s.sold_at BETWEEN p_from AND p_to
+ GROUP BY s.region
+ ORDER BY sum(s.quantity*s.unit_price) DESC, s.region
+$$;

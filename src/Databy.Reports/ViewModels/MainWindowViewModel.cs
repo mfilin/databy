@@ -1,6 +1,5 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using Avalonia.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Databy.Reports.Catalog;
@@ -46,7 +45,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private DateTimeOffset? _filterToDate;
 
     [ObservableProperty]
-    private string? _status = "Выберите отчёт и нажмите «Обновить»";
+    private string? _status = "Выберите отчёт в каталоге и нажмите «Обновить»";
 
     [ObservableProperty]
     private string _catalogVersion = "не указана";
@@ -60,11 +59,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _page;
 
+    public bool IsReportSelected => SelectedTab is not null;
     public bool CanRun => SelectedTab is not null && !IsBusy;
     public bool CanExport => SelectedTab?.CurrentResult is not null && !IsBusy;
     public bool CanGoBack => Page > 0 && !IsBusy;
     public bool CanGoForward => Page < PageCount - 1 && !IsBusy;
-    public bool HasData => SelectedTab?.Rows is { Count: > 0 };
+    public bool HasData => SelectedTab?.HasRows == true;
     public bool HasColumns => Columns.Count > 0;
     public bool ShowEmptyState => SelectedTab is not null && !IsBusy && !HasData;
     public string EmptyMessage => HasData ? string.Empty : "Нет данных";
@@ -83,11 +83,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CatalogVersion = catalog.Version;
             CatalogError = catalog.Errors.Count == 0 ? null : $"Файлов с ошибками: {catalog.Errors.Count}";
             BuildTree(catalog);
-            if (catalog.Reports.Count > 0 && Tabs.Count == 0)
-            {
-                OpenReport(catalog.Reports[0]);
-                ApplyDefaultPeriod();
-            }
             Status = CatalogError is null
                 ? $"Каталог v{CatalogVersion} • {catalog.Reports.Count} отчёт(а)"
                 : $"Каталог v{CatalogVersion} • {catalog.Reports.Count} отчёт(а) • ошибок: {catalog.Errors.Count}";
@@ -110,7 +105,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var created = new ReportTabViewModel(definition);
         Tabs.Add(created);
         SelectedTab = created;
+        ApplyDefaultPeriod();
+        OnPropertyChanged(nameof(IsReportSelected));
         return created;
+    }
+
+    public void CloseTab(ReportTabViewModel? tab)
+    {
+        if (tab is null || !Tabs.Contains(tab)) return;
+        var index = Tabs.IndexOf(tab);
+        var wasSelected = ReferenceEquals(SelectedTab, tab);
+        Tabs.Remove(tab);
+        tab.Dispose();
+        if (wasSelected)
+            SelectedTab = Tabs.Count == 0 ? null : Tabs[Math.Min(index, Tabs.Count - 1)];
+        OnPropertyChanged(nameof(IsReportSelected));
+        NotifyLayoutChanged();
+    }
+
+    public void CloseOtherTabs(ReportTabViewModel? keep)
+    {
+        foreach (var tab in Tabs.Where(tab => !ReferenceEquals(tab, keep)).ToList()) CloseTab(tab);
+        if (keep is not null && Tabs.Contains(keep)) SelectedTab = keep;
+    }
+
+    public void CloseAllTabs()
+    {
+        foreach (var tab in Tabs.ToList()) CloseTab(tab);
+        SelectedTab = null;
     }
 
     public void SetPeriod(DateTimeOffset from, DateTimeOffset to)
@@ -126,6 +148,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (SelectedTab is null) return;
         SelectedTab.GoToPage(page);
         SelectedTab.Rows = SelectedTab.GetPageView(PageSize);
+        SelectedTab.BuildTable();
         Page = SelectedTab.Page;
         NotifyLayoutChanged();
     }
@@ -141,6 +164,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasData));
         OnPropertyChanged(nameof(ShowEmptyState));
         OnPropertyChanged(nameof(EmptyMessage));
+        OnPropertyChanged(nameof(IsReportSelected));
         NotifyCommandsChanged();
         NotifyLayoutChanged();
     }
@@ -230,6 +254,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ReloadCatalog() => LoadCatalog();
 
+    [RelayCommand]
+    private void CloseTabCommand(ReportTabViewModel? tab) => CloseTab(tab);
+
+    [RelayCommand]
+    private void CloseOtherTabsCommand(ReportTabViewModel? tab) => CloseOtherTabs(tab);
+
+    [RelayCommand]
+    private void CloseAll() => CloseAllTabs();
+
     private void NotifyCommandsChanged()
     {
         RunCommand.NotifyCanExecuteChanged();
@@ -253,6 +286,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(TotalCaption));
         OnPropertyChanged(nameof(CanGoBack));
         OnPropertyChanged(nameof(CanGoForward));
+        OnPropertyChanged(nameof(IsReportSelected));
         NotifyCommandsChanged();
     }
 
@@ -262,7 +296,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         foreach (ReportTabViewModel tab in e.NewItems)
             tab.PropertyChanged += (_, args) =>
             {
-                if (args.PropertyName is nameof(ReportTabViewModel.Rows) or nameof(ReportTabViewModel.PreviewRows) or nameof(ReportTabViewModel.TotalRows))
+                if (args.PropertyName is nameof(ReportTabViewModel.Rows) or nameof(ReportTabViewModel.PreviewRows)
+                    or nameof(ReportTabViewModel.TotalRows) or nameof(ReportTabViewModel.TableRows)
+                    or nameof(ReportTabViewModel.HasRows))
                     NotifyLayoutChanged();
             };
     }
@@ -294,20 +330,46 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void BuildTree(ReportCatalog catalog)
     {
-        var root = new CatalogNode("Отчёты");
         var folders = new Dictionary<string, CatalogNode>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in catalog.Folders.OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            CatalogNode? parent = null;
+            var key = "";
+            foreach (var segment in path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            {
+                if (segment.Length == 0) continue;
+                key = key.Length == 0 ? segment : key + "/" + segment;
+                if (!folders.TryGetValue(key, out var node))
+                {
+                    node = new CatalogNode(segment);
+                    folders[key] = node;
+                    if (parent is null) Catalog.Add(node);
+                    else parent.Children.Add(node);
+                }
+                parent = node;
+            }
+        }
+
         foreach (var report in catalog.Reports)
         {
-            var prefix = report.Code.Contains('.') ? report.Code[..report.Code.IndexOf('.')] : "Отчёты";
-            if (!folders.TryGetValue(prefix, out var node))
+            var folder = FindFolder(report, folders);
+            if (folder is null)
             {
-                node = new CatalogNode(prefix);
-                folders[prefix] = node;
-                root.Children.Add(node);
+                folder = new CatalogNode("Прочее");
+                Catalog.Add(folder);
             }
-            node.Children.Add(new CatalogNode(report.Title, report.Code) { Report = report });
+            folder.Children.Add(new CatalogNode(report.Title, report.Code) { Report = report });
         }
-        Catalog.Add(root);
+
+        foreach (var node in Catalog.ToList().Where(node => node.Children.Count == 0)) Catalog.Remove(node);
+    }
+
+    private static CatalogNode? FindFolder(ReportDefinition report, Dictionary<string, CatalogNode> folders)
+    {
+        var prefix = report.Code.Split('.')[0];
+        return folders.Values.FirstOrDefault(folder => string.Equals(folder.Title, prefix, StringComparison.OrdinalIgnoreCase)
+                                                       || report.Code.StartsWith(folder.Title + ".", StringComparison.OrdinalIgnoreCase));
     }
 
     public void Dispose()
