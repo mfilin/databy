@@ -5,10 +5,8 @@ namespace Databy.Reports.Services;
 
 public interface IReportQueryService
 {
-    Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, ReportFilter filter, CancellationToken cancellationToken = default);
+    Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default);
 }
-
-public sealed record ReportFilter(DateOnly From, DateOnly To);
 
 public sealed record ReportQueryResult(ReportPreview Preview, TemporaryCsvStage Stage, long RowCount)
     : IDisposable

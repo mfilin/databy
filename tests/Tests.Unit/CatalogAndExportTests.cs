@@ -55,6 +55,24 @@ public sealed class CatalogTests
         Assert.Contains(expectedError, Assert.Single(result.Errors).Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("kind-procedure", "  kind: function", "  kind: procedure", "routine.kind")]
+    [InlineData("lookup-type", "type: date", "type: lookup", "пока не поддерживается")]
+    [InlineData("daterange-type", "type: date", "type: daterange", "пока не поддерживается")]
+    [InlineData("duplicate-param", "  - name: p_date", "  - name: p_date\n    type: date\n    label: Дубль\n  - name: p_date", "Повторяется имя параметра")]
+    [InlineData("bad-param-name", "  - name: p_date", "  - name: p-bad", "Недопустимое имя параметра")]
+    [InlineData("zero-timeout", "  kind: function", "  kind: function\n  timeout_sec: 0", "timeout_sec")]
+    public void Cat06_RejectsUnsupportedRoutineAndParameterShape(string violation, string search, string replace, string expectedError)
+    {
+        using var dir = new TempDirectory();
+        Write(dir.Path, "good.yml", Valid("good"));
+        Write(dir.Path, "bad.yml", Valid("bad").Replace(search, replace, StringComparison.Ordinal));
+        var result = new ReportCatalogLoader().Load(dir.Path);
+        Assert.Single(result.Reports);
+        Assert.Equal("good", result.Reports[0].Code);
+        Assert.Contains(expectedError, Assert.Single(result.Errors).Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Cat03_RejectsDuplicateCodes()
     {

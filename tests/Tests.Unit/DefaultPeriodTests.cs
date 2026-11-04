@@ -37,7 +37,7 @@ public sealed class DefaultPeriodTests
     [Fact]
     public async Task Dp03_RunSendsSelectedPeriodToQuery()
     {
-        ReportFilter? received = null;
+        IReadOnlyDictionary<string, object?>? received = null;
         using var viewModel = CreateViewModel(
             new ParameterDefinition { Name = "p_from", Type = "date" },
             new ParameterDefinition { Name = "p_to", Type = "date" },
@@ -48,8 +48,8 @@ public sealed class DefaultPeriodTests
         await viewModel.RunCommand.ExecuteAsync(null);
 
         Assert.NotNull(received);
-        Assert.Equal(new DateOnly(2026, 10, 1), received!.From);
-        Assert.Equal(new DateOnly(2026, 10, 31), received.To);
+        Assert.Equal(new DateOnly(2026, 10, 1), received!["p_from"]);
+        Assert.Equal(new DateOnly(2026, 10, 31), received["p_to"]);
         Assert.Single(viewModel.SelectedTab!.TableRows, row => !row.IsHeader);
         Assert.Equal(1, viewModel.SelectedTab!.PreviewRows);
     }
@@ -57,7 +57,7 @@ public sealed class DefaultPeriodTests
     private static void OpenFirstReport(MainWindowViewModel viewModel) =>
         viewModel.OpenReport(viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!);
 
-    private static MainWindowViewModel CreateViewModel(ParameterDefinition from, ParameterDefinition to, Action<ReportFilter>? onQuery = null)
+    private static MainWindowViewModel CreateViewModel(ParameterDefinition from, ParameterDefinition to, Action<IReadOnlyDictionary<string, object?>>? onQuery = null)
     {
         var definition = new ReportDefinition
         {
@@ -75,11 +75,11 @@ public sealed class DefaultPeriodTests
         public ReportCatalog Load() => new("1.0", [report], [], ["sales"]);
     }
 
-    private sealed class StubQuery(Action<ReportFilter>? onQuery) : IReportQueryService
+    private sealed class StubQuery(Action<IReadOnlyDictionary<string, object?>>? onQuery) : IReportQueryService
     {
-        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, ReportFilter filter, CancellationToken cancellationToken = default)
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
         {
-            onQuery?.Invoke(filter);
+            onQuery?.Invoke(parameters);
             var table = new DataTable();
             table.Columns.Add("amount", typeof(decimal));
             table.Rows.Add(1m);

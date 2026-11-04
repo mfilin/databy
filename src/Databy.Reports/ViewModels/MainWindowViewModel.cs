@@ -184,13 +184,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             await Task.Delay(remaining, cancellationToken);
     }
 
-    private ReportFilter BuildFilter()
+    private IReadOnlyDictionary<string, object?> BuildParameters(ReportDefinition report)
     {
-        var from = (FilterFromDate ?? FromDate ?? DefaultFrom()).Date;
-        var to = (FilterToDate ?? ToDate ?? DateTimeOffset.Now).Date;
+        var from = DateOnly.FromDateTime((FilterFromDate ?? FromDate ?? DefaultFrom()).Date);
+        var to = DateOnly.FromDateTime((FilterToDate ?? ToDate ?? DateTimeOffset.Now).Date);
         if (to < from)
             throw new ArgumentException("Дата «по» не может быть раньше даты «с»");
-        return new ReportFilter(DateOnly.FromDateTime(from), DateOnly.FromDateTime(to));
+
+        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var firstDate = true;
+        foreach (var parameter in report.Parameters.Where(parameter => string.Equals(parameter.Type, "date", StringComparison.OrdinalIgnoreCase)))
+        {
+            values[parameter.Name] = firstDate ? from : to;
+            firstDate = false;
+        }
+        return values;
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
@@ -203,7 +211,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var startedAt = DateTimeOffset.UtcNow;
         try
         {
-            var result = await _queryService.ExecuteAsync(tab.Definition, BuildFilter(), _runCts.Token);
+            var result = await _queryService.ExecuteAsync(tab.Definition, BuildParameters(tab.Definition), _runCts.Token);
             await EnsureMinimumLoadingTimeAsync(startedAt, _runCts.Token);
             tab.Apply(result);
             Page = 0;

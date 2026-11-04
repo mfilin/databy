@@ -206,7 +206,7 @@ public sealed class MainWindowViewModelTests
 
     private sealed class StubQuery(int rowCount) : IReportQueryService
     {
-        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, ReportFilter filter, CancellationToken cancellationToken = default)
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
         {
             var table = new DataTable();
             table.Columns.Add("amount", typeof(decimal));

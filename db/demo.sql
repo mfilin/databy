@@ -36,3 +36,14 @@ LANGUAGE sql STABLE AS $$
  GROUP BY s.region
  ORDER BY sum(s.quantity*s.unit_price) DESC, s.region
 $$;
+
+CREATE OR REPLACE FUNCTION reports.fn_top_products(p_limit integer, p_region text DEFAULT NULL)
+RETURNS TABLE(product text, quantity bigint, revenue numeric)
+LANGUAGE sql STABLE AS $$
+ SELECT s.product, sum(s.quantity)::bigint, sum(s.quantity*s.unit_price)::numeric(14,2)
+ FROM reports.demo_sales s
+ WHERE (p_region IS NULL OR p_region = '' OR s.region = p_region)
+ GROUP BY s.product
+ ORDER BY 3 DESC
+ LIMIT p_limit
+$$;

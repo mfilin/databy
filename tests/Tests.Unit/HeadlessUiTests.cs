@@ -148,7 +148,7 @@ public sealed class HeadlessUiTests
 
     private sealed class StubQuery : IReportQueryService
     {
-        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, ReportFilter filter, CancellationToken cancellationToken = default) =>
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ReportQueryResult(new ReportPreview(new DataTable(), 0), new TemporaryCsvStage(), 0));
     }
 
