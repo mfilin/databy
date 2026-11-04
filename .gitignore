@@ -5,3 +5,4 @@ logs/
 **/bin/
 **/obj/
 build/
+publish/

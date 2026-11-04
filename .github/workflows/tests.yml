@@ -25,3 +25,23 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet restore Databy.Reports.sln
       - run: dotnet test tests/Tests.Integration/Tests.Integration.csproj --no-restore --filter Category=T2
+  publish:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            executable: publish/Databy.Reports.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            executable: publish/Databy.Reports
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet publish src/Databy.Reports -c Release -r ${{ matrix.rid }} --self-contained -o publish
+      - name: Check executable exists
+        shell: bash
+        run: test -f "${{ matrix.executable }}" || (echo "Missing ${{ matrix.executable }}" && exit 1)

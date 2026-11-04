@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
-    <BuildRoot>$(RepoRoot)build/$(MSBuildProjectName)/</BuildRoot>
+    <BuildRoot>$([MSBuild]::NormalizeDirectory('$(RepoRoot)', 'build', '$(MSBuildProjectName)'))</BuildRoot>
     <BaseOutputPath>$(BuildRoot)</BaseOutputPath>
   </PropertyGroup>
 </Project>
