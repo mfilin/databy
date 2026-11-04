@@ -185,12 +185,80 @@ public sealed class ExportTests
         new ReportExportWriter().Save(stage, table, path, null, null, table.Rows.Count);
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3));
-        using var parser = new Microsoft.VisualBasic.FileIO.TextFieldParser(path, Encoding.UTF8)
-        { TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited, HasFieldsEnclosedInQuotes = true, TrimWhiteSpace = false };
-        parser.SetDelimiters(";");
-        _ = parser.ReadFields(); var row = parser.ReadFields()!;
+        Assert.Contains("\r\n", Encoding.UTF8.GetString(bytes));
+        var (header, row) = ReadCsvRows(path, 2);
+        Assert.Equal(new[] { "date", "amount", "text", "empty", "secret" }, header);
         Assert.Equal("товар; \"тест\"\nстрока", row[2]);
-        Assert.Equal(ReportExportWriter.NullMarker, row[3]);
+        Assert.Equal(string.Empty, row[3]);
+        Assert.DoesNotContain(ReportExportWriter.NullMarker, File.ReadAllText(path, Encoding.UTF8));
+        Assert.Equal("1234.5", row[1]);
+    }
+
+    [Fact]
+    public void Exp08_CsvUsesYamlHeadersAndDropsHiddenColumns()
+    {
+        using var files = new TempDirectory();
+        var table = Data(); var stage = Stage(files.Path, table);
+        var path = Path.Combine(files.Path, "yaml.csv");
+        var options = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["date"] = new() { Title = "Дата сделки" }, ["amount"] = new() { Title = "Итого" },
+            ["empty"] = new() { Title = "Пусто" }, ["secret"] = new() { Hidden = true }
+        };
+        new ReportExportWriter().Save(stage, table, path, null, options, table.Rows.Count);
+        var (header, row) = ReadCsvRows(path, 2);
+        Assert.Equal(new[] { "Дата сделки", "Итого", "text", "Пусто" }, header);
+        Assert.DoesNotContain("secret", string.Join(";", header));
+        Assert.Equal(row.Length, header.Length);
+    }
+
+    [Fact]
+    public void Exp09_CsvWritesIsoDatesAndInvariantNumbersInRequiredFormat()
+    {
+        using var files = new TempDirectory();
+        var table = new DataTable();
+        table.Columns.Add("d", typeof(DateOnly)); table.Columns.Add("dt", typeof(DateTime));
+        table.Columns.Add("num", typeof(decimal)); table.Columns.Add("gap", typeof(string));
+        table.Rows.Add(new DateOnly(2026, 3, 5), new DateTime(2026, 3, 5, 14, 30, 59), 1234.567m, DBNull.Value);
+        var stage = Stage(files.Path, table);
+        var path = Path.Combine(files.Path, "iso.csv");
+        new ReportExportWriter().Save(stage, table, path, null, null, 1);
+        var (_, row) = ReadCsvRows(path, 2);
+        Assert.Equal("2026-03-05", row[0]);
+        Assert.Equal("2026-03-05 14:30:59", row[1]);
+        Assert.Equal("1234.567", row[2]);
+        Assert.Equal(string.Empty, row[3]);
+    }
+
+    [Fact]
+    public void Exp10_CsvQuotesOnlyFieldsWithSeparatorsQuotesOrBreaks()
+    {
+        using var files = new TempDirectory();
+        var table = new DataTable();
+        table.Columns.Add("plain", typeof(string)); table.Columns.Add("semi", typeof(string));
+        table.Columns.Add("quote", typeof(string)); table.Columns.Add("line", typeof(string));
+        table.Rows.Add("ok", "a;b", "s\"q", "x\r\ny");
+        var stage = Stage(files.Path, table);
+        var path = Path.Combine(files.Path, "quote.csv");
+        new ReportExportWriter().Save(stage, table, path, null, null, 1);
+        var text = File.ReadAllText(path, Encoding.UTF8);
+        var line = text.Split("\r\n")[1];
+        Assert.StartsWith("ok;\"a;b\";\"s\"\"q\";", line);
+        var (_, row) = ReadCsvRows(path, 2);
+        Assert.Equal(new[] { "ok", "a;b", "s\"q", "x\r\ny" }, row);
+    }
+
+    [Fact]
+    public void Exp11_CsvAboveExcelLimitIsAlsoCleaned()
+    {
+        using var files = new TempDirectory();
+        var table = DataWithRows(6); var stage = Stage(files.Path, table);
+        var result = new ReportExportWriter().Save(stage, table, Path.Combine(files.Path, "over.xlsx"), "Rows", null, 6, 5);
+        Assert.True(result.ExcelLimitExceeded);
+        var (header, row) = ReadCsvRows(result.Path, 2);
+        Assert.Equal(new[] { "date", "amount", "text", "empty", "secret" }, header);
+        Assert.Equal(string.Empty, row[3]);
+        Assert.StartsWith("2026-10-01", row[0]);
     }
 
     [Fact]
@@ -248,6 +316,47 @@ public sealed class ExportTests
             Assert.Throws<OperationCanceledException>(() => cts.Token.ThrowIfCancellationRequested());
         }
         Assert.False(File.Exists(canceledPath));
+    }
+
+    [Fact]
+    public void Exp12_LargeCsvIsStreamedWithoutHoldingWholeFileInMemory()
+    {
+        using var files = new TempDirectory();
+        var stage = Path.Combine(files.Path, "large-stage.csv");
+        const int rows = 100_000;
+        using (var writer = new StreamWriter(stage, false, new UTF8Encoding(true)))
+        {
+            ReportExportWriter.WriteCsvRecord(writer, new[] { "id", "text" });
+            for (var i = 0; i < rows; i++) ReportExportWriter.WriteCsvRecord(writer, new[] { i.ToString(CultureInfo.InvariantCulture), "row " + i });
+        }
+        var schema = new DataTable();
+        schema.Columns.Add("id", typeof(int));
+        schema.Columns.Add("text", typeof(string));
+        var target = Path.Combine(files.Path, "large.csv");
+
+        var before = GC.GetTotalMemory(forceFullCollection: true);
+        var result = new ReportExportWriter().Save(stage, schema, target, null, null, rows);
+        var after = GC.GetTotalMemory(forceFullCollection: true);
+
+        Assert.Equal("CSV", result.Format);
+        Assert.Equal(rows, result.Rows);
+        Assert.True(new FileInfo(target).Length > rows, "CSV должен содержать все строки");
+        using var reader = new StreamReader(target, Encoding.UTF8);
+        var lineCount = 0;
+        while (reader.ReadLine() is not null) lineCount++;
+        Assert.Equal(rows + 1, lineCount);
+        Assert.True(after - before < 64L * 1024 * 1024, $"Рост памяти: {after - before} байт");
+    }
+
+    private static (string[] Header, string[] Row) ReadCsvRows(string path, int rows)
+    {
+        using var parser = new Microsoft.VisualBasic.FileIO.TextFieldParser(path, Encoding.UTF8)
+        { TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited, HasFieldsEnclosedInQuotes = true, TrimWhiteSpace = false };
+        parser.SetDelimiters(";");
+        var header = parser.ReadFields()!;
+        string[]? row = null;
+        for (var i = 1; i < rows; i++) row = parser.ReadFields()!;
+        return (header, row ?? []);
     }
 
     private static double ReadAmount(string path)

@@ -26,21 +26,72 @@ public sealed class ReportExportWriter
         IReadOnlyDictionary<string, ColumnDefinition>? columnOptions, long rowCount,
         int excelDataRowLimit = DefaultExcelDataRowLimit)
     {
-        if (!File.Exists(stagedCsv)) throw new FileNotFoundException("Временная выгрузка не найдена", stagedCsv);
+if (!File.Exists(stagedCsv)) throw new FileNotFoundException("Временная выгрузка не найдена", stagedCsv);
         if (rowCount > excelDataRowLimit)
         {
             var csvPath = Path.ChangeExtension(targetPath, ".csv");
-            File.Copy(stagedCsv, csvPath, true);
+            WriteUserCsv(stagedCsv, schema, csvPath, columnOptions);
             return new(csvPath, "CSV", rowCount, true);
         }
         if (string.Equals(Path.GetExtension(targetPath), ".csv", StringComparison.OrdinalIgnoreCase))
         {
-            File.Copy(stagedCsv, targetPath, true);
+            WriteUserCsv(stagedCsv, schema, targetPath, columnOptions);
             return new(targetPath, "CSV", rowCount, false);
         }
         WriteWorkbook(stagedCsv, schema, targetPath, sheetName, columnOptions);
         return new(targetPath, "XLSX", rowCount, false);
     }
+
+    private static void WriteUserCsv(string stagedCsv, DataTable schema, string targetPath,
+        IReadOnlyDictionary<string, ColumnDefinition>? columnOptions)
+    {
+        var visible = Enumerable.Range(0, schema.Columns.Count)
+            .Where(i => !TryGetOption(columnOptions, schema.Columns[i].ColumnName, out var option) || !option.Hidden)
+            .ToArray();
+
+        using var writer = new StreamWriter(targetPath, false, new UTF8Encoding(true)) { NewLine = "\r\n" };
+        using var parser = new TextFieldParser(stagedCsv, Encoding.UTF8)
+        {
+            TextFieldType = FieldType.Delimited,
+            HasFieldsEnclosedInQuotes = true,
+            TrimWhiteSpace = false
+        };
+        parser.SetDelimiters(";");
+        _ = parser.ReadFields(); // stage headers are database names; user headers come from YAML
+
+        WriteUserCsvRecord(writer, visible.Select(index =>
+        {
+            var name = schema.Columns[index].ColumnName;
+            return TryGetOption(columnOptions, name, out var option) && !string.IsNullOrWhiteSpace(option.Title) ? option.Title : name;
+        }));
+
+        while (!parser.EndOfData)
+        {
+            var fields = parser.ReadFields() ?? [];
+            if (fields.Length != schema.Columns.Count) throw new InvalidDataException("Временная CSV-выгрузка повреждена");
+            WriteUserCsvRecord(writer, visible.Select(index => FormatUserField(fields[index], schema.Columns[index].DataType)));
+        }
+    }
+
+    private static void WriteUserCsvRecord(TextWriter writer, IEnumerable<string> values) =>
+        writer.WriteLine(string.Join(';', values.Select(EscapeUserField)));
+
+    private static string FormatUserField(string value, Type type)
+    {
+        if (value == NullMarker) return string.Empty;
+        if (type == typeof(DateOnly)) return DateOnly.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateOnly) ? dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : value;
+        if (type == typeof(DateTime))
+        {
+            if (!DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dateTime)) return value;
+            return dateTime.TimeOfDay == TimeSpan.Zero
+                ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                : dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+        return value;
+    }
+
+    private static string EscapeUserField(string value) =>
+        value.IndexOfAny([';', '"', '\r', '\n']) < 0 ? value : "\"" + value.Replace("\"", "\"\"") + "\"";
 
     public static string CsvField(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
 

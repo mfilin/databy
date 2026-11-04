@@ -13,6 +13,8 @@ public sealed class ReportExportService : IReportExportService
     {
         if (result.Stage is null || !File.Exists(result.Stage.Path))
             throw new InvalidOperationException("Временная выгрузка отчёта недоступна");
+        if (result.Preview.Table.Columns.Count == 0)
+            throw new InvalidOperationException("Схема результата отчёта недоступна");
         return _writer.Save(result.Stage.Path, result.Preview.Table, targetPath, report.Result?.Sheet,
             report.Result?.Columns, result.RowCount);
     }
