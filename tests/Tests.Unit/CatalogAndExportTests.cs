@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text;
 using Databy.Reports.Catalog;
@@ -71,6 +71,22 @@ public sealed class CatalogTests
         Assert.Single(result.Reports);
         Assert.Equal("good", result.Reports[0].Code);
         Assert.Contains(expectedError, Assert.Single(result.Errors).Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Cat07_InvalidTypedDefaultReportsFileErrorAndKeepsOtherReports()
+    {
+        using var dir = new TempDirectory();
+        Write(dir.Path, "good.yml", Valid("good"));
+        Write(dir.Path, "bad.yml", Valid("bad")
+            .Replace("type: date", "type: int", StringComparison.Ordinal)
+            .Replace("default: today", "default: abc", StringComparison.Ordinal));
+        var result = new ReportCatalogLoader().Load(dir.Path);
+        Assert.Equal("good", Assert.Single(result.Reports).Code);
+        var error = Assert.Single(result.Errors);
+        Assert.EndsWith("bad.yml", error.File);
+        Assert.Contains("p_date", error.Message);
+        Assert.Contains("int", error.Message);
     }
 
     [Fact]

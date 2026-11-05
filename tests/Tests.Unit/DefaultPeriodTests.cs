@@ -54,6 +54,54 @@ public sealed class DefaultPeriodTests
         Assert.Equal(1, viewModel.SelectedTab!.PreviewRows);
     }
 
+    [Fact]
+    public async Task Dp04_TypedDefaultsAreSentForNonDateParameters()
+    {
+        IReadOnlyDictionary<string, object?>? received = null;
+        using var viewModel = CreateFor(
+            [
+                new ParameterDefinition { Name = "p_limit", Type = "int", Required = true, Default = "5" },
+                new ParameterDefinition { Name = "p_region", Type = "string" }
+            ],
+            parameters => received = parameters);
+        OpenFirstReport(viewModel);
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        Assert.NotNull(received);
+        Assert.Equal(5, received!["p_limit"]);
+        Assert.IsType<int>(received["p_limit"]);
+        Assert.False(received.ContainsKey("p_region") && received["p_region"] is not null);
+    }
+
+    [Fact]
+    public async Task Dp05_RequiredIntWithoutDefaultProducesParameterError()
+    {
+        using var viewModel = CreateFor([new ParameterDefinition { Name = "p_limit", Type = "int", Required = true }]);
+        OpenFirstReport(viewModel);
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        Assert.Contains("Ошибка отчёта", viewModel.Status);
+        Assert.Contains("p_limit", viewModel.Status);
+    }
+
+    private static MainWindowViewModel CreateFor(ParameterDefinition[] parameters, Action<IReadOnlyDictionary<string, object?>>? onQuery = null)
+    {
+        var definition = new ReportDefinition
+        {
+            Code = "sales.top_products",
+            Title = "Топ товаров",
+            Routine = new RoutineDefinition { Name = "reports.fn_top_products" },
+            Parameters = [.. parameters],
+            Result = new ResultDefinition { Columns = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase) { ["amount"] = new() { Title = "Сумма" } } }
+        };
+        return new MainWindowViewModel(new StubCatalog(definition), new StubQuery(onQuery), new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.Zero
+        };
+    }
+
     private static void OpenFirstReport(MainWindowViewModel viewModel) =>
         viewModel.OpenReport(viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!);
 

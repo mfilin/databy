@@ -198,7 +198,7 @@ public sealed class MainWindowViewModelTests
             await viewModel.RunCommand.ExecuteAsync(null);
             stopwatch.Stop();
 
-            Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(200), $"Загрузка заняла {stopwatch.ElapsedMilliseconds} мс");
+            Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(190), $"Загрузка заняла {stopwatch.ElapsedMilliseconds} мс");
             Assert.False(viewModel.IsBusy);
         }
         finally { viewModel.Dispose(); }

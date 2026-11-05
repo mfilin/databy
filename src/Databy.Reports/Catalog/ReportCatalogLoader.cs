@@ -66,6 +66,12 @@ if (report.Routine is null || string.IsNullOrWhiteSpace(report.Routine.Name)) re
             if (!ParameterTypes.Contains(parameter.Type)) return $"Неизвестный тип параметра '{parameter.Type}'";
         }
 
+        foreach (var parameter in report.Parameters)
+        {
+            try { ParameterDefaults.Resolve(parameter, DateOnly.FromDateTime(DateTime.Today)); }
+            catch (FormatException ex) { return ex.Message; }
+        }
+
         var invalidRole = report.Roles.FirstOrDefault(role => !Roles.Contains(role));
         return invalidRole is null ? null : $"Недопустимая роль '{invalidRole}'";
     }

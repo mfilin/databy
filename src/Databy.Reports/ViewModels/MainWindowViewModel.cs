@@ -192,11 +192,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             throw new ArgumentException("Дата «по» не может быть раньше даты «с»");
 
         var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        foreach (var parameter in report.Parameters)
+        {
+            var resolved = ParameterDefaults.Resolve(parameter, today);
+            if (resolved is not null) values[parameter.Name] = resolved;
+        }
+
         var firstDate = true;
         foreach (var parameter in report.Parameters.Where(parameter => string.Equals(parameter.Type, "date", StringComparison.OrdinalIgnoreCase)))
         {
             values[parameter.Name] = firstDate ? from : to;
             firstDate = false;
+        }
+
+        foreach (var parameter in report.Parameters)
+        {
+            if (!parameter.Required) continue;
+            if (values.TryGetValue(parameter.Name, out var value) && value is not null) continue;
+            throw new ArgumentException($"Не задано значение обязательного параметра '{parameter.Name}'", parameter.Name);
         }
         return values;
     }
