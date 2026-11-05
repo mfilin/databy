@@ -5,18 +5,22 @@ namespace Databy.Reports.Services;
 public sealed class ApplicationSettings : IApplicationSettings
 {
     public const string ConnectionVariable = "DATABY_CONNECTION";
-    private const string DefaultConnectionString = "Host=localhost;Port=5432;Database=db1;Username=db1;Timeout=10;Command Timeout=60";
     private readonly string _baseDirectory;
+    private readonly string? _connectionString;
 
     public ApplicationSettings(string? baseDirectory = null)
     {
         _baseDirectory = baseDirectory ?? AppContext.BaseDirectory;
-        ConnectionString = Environment.GetEnvironmentVariable(ConnectionVariable) ?? ReadConnectionString() ?? DefaultConnectionString;
+        _connectionString = Environment.GetEnvironmentVariable(ConnectionVariable) ?? ReadConnectionString();
         CatalogRoot = ResolveCatalogRoot(_baseDirectory);
         LogDirectory = Path.Combine(_baseDirectory, "logs");
     }
 
-    public string ConnectionString { get; }
+    public string ConnectionString => _connectionString ?? throw new InvalidOperationException(
+        $"Не задана строка подключения к PostgreSQL. Укажите её в переменной окружения {ConnectionVariable} " +
+        $"или в файле appsettings.local.json рядом с программой: {Path.Combine(_baseDirectory, "appsettings.local.json")} " +
+        "(свойство \"ConnectionString\").");
+
     public string CatalogRoot { get; }
     public string LogDirectory { get; }
 

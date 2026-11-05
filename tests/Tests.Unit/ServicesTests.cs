@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text;
 using Databy.Reports.Catalog;
 using Databy.Reports.Export;
 using Databy.Reports.Services;
@@ -286,5 +287,64 @@ public sealed class MainWindowViewModelTests
     {
         public ExportResult Save(ReportQueryResult result, ReportDefinition report, string targetPath) =>
             new(targetPath, "CSV", result.RowCount, false);
+    }
+}
+
+[Trait("Category", "T1")]
+public sealed class ApplicationSettingsTests
+{
+    [Fact]
+    public void Set01_ThrowsClearErrorWhenNoConnectionIsConfigured()
+    {
+        using var dir = new TempDirectory();
+        using var env = new EnvironmentVariableScope(ApplicationSettings.ConnectionVariable, null);
+
+        var settings = new ApplicationSettings(dir.Path);
+
+        Assert.True(File.Exists(Path.Combine(dir.Path, "logs")) == false);
+        var ex = Assert.Throws<InvalidOperationException>(() => settings.ConnectionString);
+        Assert.Contains(ApplicationSettings.ConnectionVariable, ex.Message);
+        Assert.Contains("appsettings.local.json", ex.Message);
+    }
+
+    [Fact]
+    public void Set02_ReadsConnectionStringFromLocalFile()
+    {
+        using var dir = new TempDirectory();
+        using var env = new EnvironmentVariableScope(ApplicationSettings.ConnectionVariable, null);
+        File.WriteAllText(Path.Combine(dir.Path, "appsettings.local.json"),
+            "{\"ConnectionString\": \"Host=db.example;Database=reports\"}", new UTF8Encoding(false));
+
+        var settings = new ApplicationSettings(dir.Path);
+
+        Assert.Equal("Host=db.example;Database=reports", settings.ConnectionString);
+    }
+
+    [Fact]
+    public void Set03_EnvironmentVariableWinsOverFile()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "appsettings.local.json"),
+            "{\"ConnectionString\": \"Host=file;Database=x\"}", new UTF8Encoding(false));
+        using var env = new EnvironmentVariableScope(ApplicationSettings.ConnectionVariable, "Host=env;Database=y");
+
+        var settings = new ApplicationSettings(dir.Path);
+
+        Assert.Equal("Host=env;Database=y", settings.ConnectionString);
+    }
+
+    private sealed class EnvironmentVariableScope : IDisposable
+    {
+        private readonly string _name;
+        private readonly string? _previous;
+
+        public EnvironmentVariableScope(string name, string? value)
+        {
+            _name = name;
+            _previous = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, value);
+        }
+
+        public void Dispose() => Environment.SetEnvironmentVariable(_name, _previous);
     }
 }
