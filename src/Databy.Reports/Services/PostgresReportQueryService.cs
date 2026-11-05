@@ -17,17 +17,17 @@ public sealed partial class PostgresReportQueryService : IReportQueryService
 
     public async Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
     {
-        var command_ = BuildCommand(report, parameters);
+        var routineCommand = BuildCommand(report, parameters);
 
         await using var connection = new NpgsqlConnection(_settings.ConnectionString);
         await connection.OpenAsync(cancellationToken);
         await EnsureRoutineExistsAsync(connection, report, cancellationToken);
 
-        await using var command = new NpgsqlCommand(command_.Text, connection)
+        await using var command = new NpgsqlCommand(routineCommand.Text, connection)
         {
             CommandTimeout = report.Routine.TimeoutSec
         };
-        foreach (var parameter in command_.Parameters)
+        foreach (var parameter in routineCommand.Parameters)
             command.Parameters.AddWithValue(parameter.Name, parameter.NpgsqlType, parameter.Value ?? DBNull.Value);
 
         var table = new DataTable();

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -26,7 +26,7 @@ public sealed class ReportExportWriter
         IReadOnlyDictionary<string, ColumnDefinition>? columnOptions, long rowCount,
         int excelDataRowLimit = DefaultExcelDataRowLimit)
     {
-if (!File.Exists(stagedCsv)) throw new FileNotFoundException("Временная выгрузка не найдена", stagedCsv);
+        if (!File.Exists(stagedCsv)) throw new FileNotFoundException("Временная выгрузка не найдена", stagedCsv);
         if (rowCount > excelDataRowLimit)
         {
             var csvPath = Path.ChangeExtension(targetPath, ".csv");

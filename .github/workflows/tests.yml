@@ -15,6 +15,8 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet restore Databy.Reports.sln
       - run: dotnet build Databy.Reports.sln --no-restore
+      - if: matrix.os == 'ubuntu-latest'
+        run: dotnet format whitespace Databy.Reports.sln --verify-no-changes
       - run: dotnet test tests/Tests.Unit/Tests.Unit.csproj --no-build --filter Category=T1
   t2:
     runs-on: ubuntu-latest

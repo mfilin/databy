@@ -1,4 +1,4 @@
-﻿using Npgsql;
+using Npgsql;
 using NpgsqlTypes;
 using Testcontainers.PostgreSql;
 using Xunit;

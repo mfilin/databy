@@ -9,7 +9,7 @@ namespace Tests.Unit;
 [Trait("Category", "T1")]
 public sealed class MainWindowViewModelTests
 {
-    
+
 
     [Fact]
     public void Vm01_BuildsCatalogTreeWithoutAutoOpeningReport()

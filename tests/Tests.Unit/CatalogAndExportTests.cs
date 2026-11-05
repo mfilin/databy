@@ -180,7 +180,9 @@ public sealed class ExportTests
         var path = Path.Combine(files.Path, "result.xlsx");
         var options = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase)
         {
-            ["date"] = new() { Title = "Дата сделки" }, ["amount"] = new() { Title = "Итого", Format = "#,##0.00" }, ["secret"] = new() { Hidden = true }
+            ["date"] = new() { Title = "Дата сделки" },
+            ["amount"] = new() { Title = "Итого", Format = "#,##0.00" },
+            ["secret"] = new() { Hidden = true }
         };
         new ReportExportWriter().Save(stage, table, path, "Продажи", options, table.Rows.Count);
         using var reader = ExcelReaderFactory.CreateReader(File.OpenRead(path));
@@ -236,8 +238,10 @@ public sealed class ExportTests
         var path = Path.Combine(files.Path, "yaml.csv");
         var options = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase)
         {
-            ["date"] = new() { Title = "Дата сделки" }, ["amount"] = new() { Title = "Итого" },
-            ["empty"] = new() { Title = "Пусто" }, ["secret"] = new() { Hidden = true }
+            ["date"] = new() { Title = "Дата сделки" },
+            ["amount"] = new() { Title = "Итого" },
+            ["empty"] = new() { Title = "Пусто" },
+            ["secret"] = new() { Hidden = true }
         };
         new ReportExportWriter().Save(stage, table, path, null, options, table.Rows.Count);
         var (header, row) = ReadCsvRows(path, 2);

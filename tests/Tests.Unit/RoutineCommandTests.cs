@@ -19,8 +19,11 @@ public sealed class RoutineCommandTests
 
         var command = PostgresReportQueryService.BuildCommand(report, new Dictionary<string, object?>
         {
-            ["p_from"] = new DateOnly(2026, 1, 1), ["p_count"] = 5, ["p_amount"] = 10.5m,
-            ["p_text"] = "abc", ["p_flag"] = true
+            ["p_from"] = new DateOnly(2026, 1, 1),
+            ["p_count"] = 5,
+            ["p_amount"] = 10.5m,
+            ["p_text"] = "abc",
+            ["p_flag"] = true
         });
 
         Assert.Equal("SELECT * FROM reports.fn_test(p_from => @p_from, p_count => @p_count, p_amount => @p_amount, p_text => @p_text, p_flag => @p_flag)",
@@ -66,7 +69,8 @@ public sealed class RoutineCommandTests
 
         var command = PostgresReportQueryService.BuildCommand(report, new Dictionary<string, object?>
         {
-            ["p_from"] = new DateOnly(2026, 1, 1), ["p_text"] = injected
+            ["p_from"] = new DateOnly(2026, 1, 1),
+            ["p_text"] = injected
         });
 
         Assert.DoesNotContain("DROP TABLE", command.Text);
