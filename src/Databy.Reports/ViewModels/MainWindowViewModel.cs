@@ -10,7 +10,7 @@ namespace Databy.Reports.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     public const int PageSize = 100;
-    public static TimeSpan MinimumLoadingTime { get; set; } = TimeSpan.FromSeconds(2);
+    public TimeSpan MinimumLoadingTime { get; set; } = TimeSpan.FromMilliseconds(500);
     private readonly IReportCatalogService _catalogService;
     private readonly IReportQueryService _queryService;
     private readonly IReportExportService _exportService;
@@ -177,7 +177,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         NotifyLayoutChanged();
     }
 
-    private static async Task EnsureMinimumLoadingTimeAsync(DateTimeOffset startedAt, CancellationToken cancellationToken)
+    private async Task EnsureMinimumLoadingTimeAsync(DateTimeOffset startedAt, CancellationToken cancellationToken)
     {
         var remaining = MinimumLoadingTime - (DateTimeOffset.UtcNow - startedAt);
         if (remaining > TimeSpan.Zero)
@@ -209,11 +209,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsBusy = true;
         Status = "Выполняется запрос…";
         var startedAt = DateTimeOffset.UtcNow;
+        ReportQueryResult? result = null;
+        var applied = false;
         try
         {
-            var result = await _queryService.ExecuteAsync(tab.Definition, BuildParameters(tab.Definition), _runCts.Token);
+            result = await _queryService.ExecuteAsync(tab.Definition, BuildParameters(tab.Definition), _runCts.Token);
             await EnsureMinimumLoadingTimeAsync(startedAt, _runCts.Token);
+            _runCts.Token.ThrowIfCancellationRequested();
             tab.Apply(result);
+            applied = true;
             Page = 0;
             Status = $"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
                      (tab.TotalRows > tab.PreviewRows ? " (превью ограничено)" : string.Empty);
@@ -226,6 +230,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            if (!applied) result?.Dispose();
             IsBusy = false;
             _runCts?.Dispose();
             _runCts = null;

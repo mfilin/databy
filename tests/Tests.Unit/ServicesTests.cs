@@ -184,11 +184,61 @@ public sealed class MainWindowViewModelTests
         finally { viewModel.Dispose(); }
     }
 
+    [Fact]
+    public async Task Vm09_LoadingPanelHonoursMinimumLoadingTime()
+    {
+        var viewModel = new MainWindowViewModel(new StubCatalog(), new StubQuery(0), new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.FromMilliseconds(200)
+        };
+        try
+        {
+            viewModel.OpenReport(FirstReport(viewModel));
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            await viewModel.RunCommand.ExecuteAsync(null);
+            stopwatch.Stop();
+
+            Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(200), $"Загрузка заняла {stopwatch.ElapsedMilliseconds} мс");
+            Assert.False(viewModel.IsBusy);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    [Fact]
+    public async Task Vm10_CancelDuringLoadingReleasesStagedFile()
+    {
+        TemporaryCsvStage? stage = null;
+        var query = new CancelableQuery(() => stage = new TemporaryCsvStage());
+        var viewModel = new MainWindowViewModel(new StubCatalog(), query, new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.FromSeconds(30)
+        };
+        try
+        {
+            var tab = viewModel.OpenReport(FirstReport(viewModel));
+            var run = viewModel.RunCommand.ExecuteAsync(null);
+            await query.ResultProduced.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            viewModel.CancelCommand.Execute(null);
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.NotNull(stage);
+            Assert.False(File.Exists(stage!.Path), "Временный stage-файл должен быть удалён после отмены");
+            Assert.Equal("Запуск отменён", viewModel.Status);
+            Assert.Null(tab.CurrentResult);
+            Assert.False(viewModel.HasData);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
     internal static ReportDefinition FirstReport(MainWindowViewModel viewModel) =>
         viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!;
 
     internal static MainWindowViewModel CreateViewModel(int rowCount = 2) =>
-        new(new StubCatalog(), new StubQuery(rowCount), new StubExport());
+        new(new StubCatalog(), new StubQuery(rowCount), new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.Zero
+        };
 
     private sealed class StubCatalog : IReportCatalogService
     {
@@ -212,6 +262,23 @@ public sealed class MainWindowViewModelTests
             table.Columns.Add("amount", typeof(decimal));
             for (var i = 0; i < rowCount; i++) table.Rows.Add(i + 0.5m);
             return Task.FromResult(new ReportQueryResult(new ReportPreview(table, rowCount), new TemporaryCsvStage(), rowCount));
+        }
+    }
+
+    private sealed class CancelableQuery(Func<TemporaryCsvStage> createStage) : IReportQueryService
+    {
+        public TaskCompletionSource ResultProduced { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
+        {
+            var table = new DataTable();
+            table.Columns.Add("amount", typeof(decimal));
+            table.Rows.Add(1m);
+            var stage = createStage();
+            using (var writer = stage.OpenWriter())
+                ReportExportWriter.WriteCsvRecord(writer, new[] { "amount" });
+            ResultProduced.TrySetResult();
+            return Task.FromResult(new ReportQueryResult(new ReportPreview(table, 1), stage, 1));
         }
     }
 

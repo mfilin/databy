@@ -137,7 +137,10 @@ public sealed class HeadlessUiTests
             Parameters = [new ParameterDefinition { Name = "p_from", Type = "date" }, new ParameterDefinition { Name = "p_to", Type = "date" }],
             Result = new ResultDefinition { Columns = columns }
         };
-        var viewModel = new MainWindowViewModel(new StubCatalog(definition), new StubQuery(), new StubExport());
+        var viewModel = new MainWindowViewModel(new StubCatalog(definition), new StubQuery(), new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.Zero
+        };
         return (new MainWindow { DataContext = viewModel }, viewModel);
     }
 

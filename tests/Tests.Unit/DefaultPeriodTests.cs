@@ -67,7 +67,10 @@ public sealed class DefaultPeriodTests
             Parameters = [from, to],
             Result = new ResultDefinition { Columns = new Dictionary<string, ColumnDefinition>(StringComparer.OrdinalIgnoreCase) { ["amount"] = new() { Title = "Сумма" } } }
         };
-        return new MainWindowViewModel(new StubCatalog(definition), new StubQuery(onQuery), new StubExport());
+        return new MainWindowViewModel(new StubCatalog(definition), new StubQuery(onQuery), new StubExport())
+        {
+            MinimumLoadingTime = TimeSpan.Zero
+        };
     }
 
     private sealed class StubCatalog(ReportDefinition report) : IReportCatalogService
