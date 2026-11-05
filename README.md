@@ -16,20 +16,40 @@ sudo apt-get install -y libx11-6 libice6 libsm6 libfontconfig1 libfreetype6 \
 
 Для запуска GUI на headless-сервере нужен X-сервер (например, `xvfb-run`).
 
+## Установка
+
+Логи (`logs/`), файл `appsettings.local.json` и каталог `catalog/` располагаются **рядом с исполняемым файлом**: приложение читает их из `AppContext.BaseDirectory`. Поэтому ставить программу нужно в каталог, где у пользователя есть право записи:
+
+- Windows: `%LOCALAPPDATA%\Programs\Databy` (например, `C:\Users\<user>\AppData\Local\Programs\Databy`);
+- Linux: `~/Databy` или `~/.local/opt/Databy`.
+
+Установка в `C:\Program Files` и `/opt` **не поддерживается**: каталог доступен только на чтение, и приложение не сможет создавать `logs/` и `appsettings.local.json`.
+
+Установка:
+
+1. Опубликуйте сборку (см. «Публикация») или распакуйте готовый архив.
+2. Скопируйте содержимое `publish/<rid>` в выбранный каталог.
+3. При необходимости создайте рядом с исполняемым файлом `appsettings.local.json` (см. «Настройка подключения»).
+4. Запустите `Databy.Reports.exe` (Windows) или `./Databy.Reports` (Linux).
+
+Обновление: остановите приложение, замените файлы сборки, сохранив `logs/`, `appsettings.local.json` и `catalog/`.
+
 ## Настройка подключения
 
 Строка подключения берётся в следующем порядке:
 
 1. Переменная окружения `DATABY_CONNECTION`.
-2. Файл `src/Databy.Reports/appsettings.local.json` (исключён из Git):
+2. Файл `appsettings.local.json` в каталоге приложения (`AppContext.BaseDirectory`):
+   - для установленной программы — рядом с исполняемым файлом, например `%LOCALAPPDATA%\Programs\Databy\appsettings.local.json` или `~/Databy/appsettings.local.json`;
+   - при `dotnet run`/`dotnet build` — в каталоге сборки: `build/Databy.Reports/Debug/net8.0/appsettings.local.json`. Файл копируется туда из `src/Databy.Reports/appsettings.local.json` (исключён из Git).
+
+Пример:
 
 ```json
 {
   "ConnectionString": "Host=localhost;Port=5432;Database=db1;Username=db1;Password=..."
 }
 ```
-
-3. Fallback на локальный `db1` без пароля.
 
 Демо-данные (если база пустая):
 
