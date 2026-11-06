@@ -87,6 +87,17 @@ dotnet publish src/Databy.Reports -c Release -r linux-x64 --self-contained -o pu
 
 Исполняемые файлы: `publish/win-x64/Databy.Reports.exe` и `publish/linux-x64/Databy.Reports` (на Linux выдайте право на запуск: `chmod +x publish/linux-x64/Databy.Reports`).
 
+## Логи и аудит
+
+Каталог `logs/` создаётся автоматически рядом с исполняемым файлом.
+
+- `logs/databy-YYYYMMDD.log` — общий журнал приложения.
+- `logs/audit-YYYYMMDD.log` — аудит запусков отчётов.
+
+В аудит попадают: учётная запись ОС (`DOMAIN\User` на Windows), код и название отчёта, параметры запуска, результат (`started`, `succeeded`, `failed`, `canceled`), количество строк и длительность. Для ошибок также пишется тип и текст исключения. Общий журнал хранится 30 дней, аудит — 90 дней.
+
+Пока локальная авторизация не реализована, пользователь определяется по учётной записи ОС. Для перехода на авторизацию приложения достаточно заменить реализацию `ICurrentUser`.
+
 ## Тесты
 
 - `tests/Tests.Unit` — каталог и экспорт (T1), запускается на Windows и Linux.
@@ -98,7 +109,7 @@ dotnet publish src/Databy.Reports -c Release -r linux-x64 --self-contained -o pu
 Приложение использует MVVM и внедрение зависимостей (`Microsoft.Extensions.DependencyInjection`).
 
 - `src/Databy.Reports/Composition/ServiceRegistration.cs` — регистрация сервисов и ViewModel.
-- `src/Databy.Reports/Services/` — конфигурация, каталог, PostgreSQL-запросы, экспорт, диалоги (`IApplicationSettings`, `IReportCatalogService`, `IReportQueryService`, `IReportExportService`, `IFileDialogService`).
+- `src/Databy.Reports/Services/` — конфигурация, каталог, PostgreSQL-запросы, экспорт, диалоги и аудит (`IApplicationSettings`, `IReportCatalogService`, `IReportQueryService`, `IReportExportService`, `IFileDialogService`, `ICurrentUser`, `IReportAuditService`).
 - `src/Databy.Reports/ViewModels/` — `MainWindowViewModel`, `ReportTabViewModel`, `CatalogNode`, `ReportColumnViewModel` на `CommunityToolkit.Mvvm`.
 - `src/Databy.Reports/Views/MainWindow.axaml` — светлый интерфейс: Header, Body (левое дерево каталога, вкладки и таблица с пагинацией, правая панель фильтров), StatusBar.
 
@@ -110,4 +121,4 @@ dotnet publish src/Databy.Reports -c Release -r linux-x64 --self-contained -o pu
 - `tests/db/init.sql` — синтетическая схема и функции для интеграционных тестов.
 - `docs/` — техническое задание.
 
-Приложение пока не реализует полную локальную авторизацию и роли, журнал аудита, зависимые справочники, schema JSON и потоковый XLSX с контролем памяти. Эти пункты остаются за пределами текущего тестового среза.
+Приложение пока не реализует полную локальную авторизацию и роли, зависимые справочники, schema JSON и потоковый XLSX с контролем памяти. Аудит запусков отчётов уже пишется в `logs/audit-YYYYMMDD.log`, но использует учётную запись ОС, а не пользователя приложения.

@@ -232,11 +232,88 @@ public sealed class MainWindowViewModelTests
         finally { viewModel.Dispose(); }
     }
 
+    [Fact]
+    public async Task Vm11_RunWritesAuditOnSuccess()
+    {
+        var audit = new RecordingAuditService();
+        var viewModel = CreateViewModel(rowCount: 3, audit: audit);
+        try
+        {
+            viewModel.OpenReport(FirstReport(viewModel));
+
+            await viewModel.RunCommand.ExecuteAsync(null);
+
+            var started = Assert.Single(audit.Started);
+            Assert.Equal("sales.monthly", started.Report.Code);
+            Assert.Equal(new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1), started.Parameters["p_from"]);
+            var succeeded = Assert.Single(audit.Succeeded);
+            Assert.Equal("sales.monthly", succeeded.Report.Code);
+            Assert.Equal(3, succeeded.RowCount);
+            Assert.True(succeeded.DurationMs >= 0);
+            Assert.Empty(audit.Failed);
+            Assert.Empty(audit.Canceled);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    [Fact]
+    public async Task Vm12_RunWritesAuditOnFailure()
+    {
+        var audit = new RecordingAuditService();
+        var viewModel = new MainWindowViewModel(new StubCatalog(), new ThrowingQuery(), new StubExport(), audit)
+        {
+            MinimumLoadingTime = TimeSpan.Zero
+        };
+        try
+        {
+            viewModel.OpenReport(FirstReport(viewModel));
+
+            await viewModel.RunCommand.ExecuteAsync(null);
+
+            Assert.Single(audit.Started);
+            var failed = Assert.Single(audit.Failed);
+            Assert.Equal("sales.monthly", failed.Report.Code);
+            Assert.IsType<InvalidOperationException>(failed.Exception);
+            Assert.Contains("boom", failed.Exception.Message);
+            Assert.Contains("boom", viewModel.Status);
+            Assert.Empty(audit.Succeeded);
+            Assert.Empty(audit.Canceled);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
+    [Fact]
+    public async Task Vm13_CancelWritesAudit()
+    {
+        var audit = new RecordingAuditService();
+        var query = new CancelableQuery(() => new TemporaryCsvStage());
+        var viewModel = new MainWindowViewModel(new StubCatalog(), query, new StubExport(), audit)
+        {
+            MinimumLoadingTime = TimeSpan.FromSeconds(30)
+        };
+        try
+        {
+            viewModel.OpenReport(FirstReport(viewModel));
+            var run = viewModel.RunCommand.ExecuteAsync(null);
+            await query.ResultProduced.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            viewModel.CancelCommand.Execute(null);
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Single(audit.Started);
+            var canceled = Assert.Single(audit.Canceled);
+            Assert.Equal("sales.monthly", canceled.Report.Code);
+            Assert.Empty(audit.Succeeded);
+            Assert.Empty(audit.Failed);
+        }
+        finally { viewModel.Dispose(); }
+    }
+
     internal static ReportDefinition FirstReport(MainWindowViewModel viewModel) =>
         viewModel.Catalog.SelectMany(folder => folder.Children).First(node => node.Report is not null).Report!;
 
-    internal static MainWindowViewModel CreateViewModel(int rowCount = 2) =>
-        new(new StubCatalog(), new StubQuery(rowCount), new StubExport())
+    internal static MainWindowViewModel CreateViewModel(int rowCount = 2, IReportAuditService? audit = null) =>
+        new(new StubCatalog(), new StubQuery(rowCount), new StubExport(), audit)
         {
             MinimumLoadingTime = TimeSpan.Zero
         };
@@ -265,6 +342,37 @@ public sealed class MainWindowViewModelTests
             return Task.FromResult(new ReportQueryResult(new ReportPreview(table, rowCount), new TemporaryCsvStage(), rowCount));
         }
     }
+
+    private sealed class ThrowingQuery : IReportQueryService
+    {
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("boom");
+    }
+
+    private sealed class RecordingAuditService : IReportAuditService
+    {
+        public List<StartedRecord> Started { get; } = [];
+        public List<SucceededRecord> Succeeded { get; } = [];
+        public List<FailedRecord> Failed { get; } = [];
+        public List<CanceledRecord> Canceled { get; } = [];
+
+        public void ReportStarted(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters) =>
+            Started.Add(new(report, parameters));
+
+        public void ReportSucceeded(ReportDefinition report, long rowCount, long durationMs) =>
+            Succeeded.Add(new(report, rowCount, durationMs));
+
+        public void ReportFailed(ReportDefinition report, Exception exception, long durationMs) =>
+            Failed.Add(new(report, exception, durationMs));
+
+        public void ReportCanceled(ReportDefinition report, long durationMs) =>
+            Canceled.Add(new(report, durationMs));
+    }
+
+    private sealed record StartedRecord(ReportDefinition Report, IReadOnlyDictionary<string, object?> Parameters);
+    private sealed record SucceededRecord(ReportDefinition Report, long RowCount, long DurationMs);
+    private sealed record FailedRecord(ReportDefinition Report, Exception Exception, long DurationMs);
+    private sealed record CanceledRecord(ReportDefinition Report, long DurationMs);
 
     private sealed class CancelableQuery(Func<TemporaryCsvStage> createStage) : IReportQueryService
     {

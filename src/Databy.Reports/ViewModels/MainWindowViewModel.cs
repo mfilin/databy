@@ -14,13 +14,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IReportCatalogService _catalogService;
     private readonly IReportQueryService _queryService;
     private readonly IReportExportService _exportService;
+    private readonly IReportAuditService _auditService;
     private CancellationTokenSource? _runCts;
 
-    public MainWindowViewModel(IReportCatalogService catalogService, IReportQueryService queryService, IReportExportService exportService)
+    public MainWindowViewModel(
+        IReportCatalogService catalogService,
+        IReportQueryService queryService,
+        IReportExportService exportService,
+        IReportAuditService? auditService = null)
     {
         _catalogService = catalogService;
         _queryService = queryService;
         _exportService = exportService;
+        _auditService = auditService ?? NullReportAuditService.Instance;
         Tabs.CollectionChanged += OnTabsChanged;
         LoadCatalog();
         ApplyDefaultPeriod();
@@ -183,6 +189,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         NotifyLayoutChanged();
     }
 
+    private static long ElapsedMs(DateTimeOffset startedAt) =>
+        (long)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds;
+
     private async Task EnsureMinimumLoadingTimeAsync(DateTimeOffset startedAt, CancellationToken cancellationToken)
     {
         var remaining = MinimumLoadingTime - (DateTimeOffset.UtcNow - startedAt);
@@ -233,7 +242,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var applied = false;
         try
         {
-            result = await _queryService.ExecuteAsync(tab.Definition, BuildParameters(tab.Definition), _runCts.Token);
+            var parameters = BuildParameters(tab.Definition);
+            _auditService.ReportStarted(tab.Definition, parameters);
+            result = await _queryService.ExecuteAsync(tab.Definition, parameters, _runCts.Token);
             await EnsureMinimumLoadingTimeAsync(startedAt, _runCts.Token);
             _runCts.Token.ThrowIfCancellationRequested();
             tab.Apply(result);
@@ -241,11 +252,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Page = 0;
             Status = $"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
                      (tab.TotalRows > tab.PreviewRows ? " (превью ограничено)" : string.Empty);
+            _auditService.ReportSucceeded(tab.Definition, tab.TotalRows, ElapsedMs(startedAt));
         }
-        catch (OperationCanceledException) { Status = "Запуск отменён"; }
+        catch (OperationCanceledException)
+        {
+            Status = "Запуск отменён";
+            _auditService.ReportCanceled(tab.Definition, ElapsedMs(startedAt));
+        }
         catch (Exception ex)
         {
             Status = "Ошибка отчёта: " + ex.Message;
+            _auditService.ReportFailed(tab.Definition, ex, ElapsedMs(startedAt));
             Serilog.Log.Error(ex, "Report {ReportCode} failed", tab.Code);
         }
         finally

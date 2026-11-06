@@ -12,6 +12,8 @@ public static class ServiceRegistration
     {
         var services = new ServiceCollection();
         services.AddSingleton<IApplicationSettings>(_ => new ApplicationSettings(baseDirectory));
+        services.AddSingleton<ICurrentUser, CurrentUser>();
+        services.AddSingleton<IReportAuditService, SerilogReportAuditService>();
         services.AddSingleton<ReportCatalogLoader>();
         services.AddSingleton<IReportCatalogService, ReportCatalogService>();
         services.AddSingleton<IReportQueryService, PostgresReportQueryService>();
