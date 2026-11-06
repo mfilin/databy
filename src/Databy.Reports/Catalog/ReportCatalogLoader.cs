@@ -12,6 +12,8 @@ public sealed class ReportCatalogLoader
 {
     private static readonly HashSet<string> ParameterTypes = new(StringComparer.OrdinalIgnoreCase)
         { "date", "daterange", "int", "decimal", "string", "bool", "lookup" };
+    private static readonly HashSet<string> UnsupportedTypes = new(StringComparer.OrdinalIgnoreCase) { "daterange", "lookup" };
+    private static readonly HashSet<string> RoutineKinds = new(StringComparer.OrdinalIgnoreCase) { "function" };
     private static readonly HashSet<string> Roles = new(StringComparer.OrdinalIgnoreCase) { "admin", "user" };
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance).IgnoreUnmatchedProperties().Build();
@@ -52,8 +54,24 @@ public sealed class ReportCatalogLoader
         if (string.IsNullOrWhiteSpace(report.Title)) return "Не задан title";
         if (report.Routine is null || string.IsNullOrWhiteSpace(report.Routine.Name)) return "Не задан routine.name";
         if (!Regex.IsMatch(report.Routine.Name, @"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$")) return "routine.name должен иметь вид schema.function";
+        if (!RoutineKinds.Contains(report.Routine.Kind)) return $"routine.kind '{report.Routine.Kind}' пока не поддерживается (допустимо: function)";
+        if (report.Routine.TimeoutSec <= 0) return $"routine.timeout_sec должен быть больше нуля (сейчас {report.Routine.TimeoutSec})";
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var parameter in report.Parameters)
+        {
+            if (!Regex.IsMatch(parameter.Name, @"^[a-zA-Z_][a-zA-Z0-9_]*$")) return $"Недопустимое имя параметра '{parameter.Name}'";
+            if (!names.Add(parameter.Name)) return $"Повторяется имя параметра '{parameter.Name}'";
+            if (UnsupportedTypes.Contains(parameter.Type)) return $"Тип параметра '{parameter.Type}' пока не поддерживается";
             if (!ParameterTypes.Contains(parameter.Type)) return $"Неизвестный тип параметра '{parameter.Type}'";
+        }
+
+        foreach (var parameter in report.Parameters)
+        {
+            try { ParameterDefaults.Resolve(parameter, DateOnly.FromDateTime(DateTime.Today)); }
+            catch (FormatException ex) { return ex.Message; }
+        }
+
         var invalidRole = report.Roles.FirstOrDefault(role => !Roles.Contains(role));
         return invalidRole is null ? null : $"Недопустимая роль '{invalidRole}'";
     }

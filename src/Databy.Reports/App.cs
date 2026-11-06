@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls;
 using Avalonia.Themes.Fluent;
@@ -9,6 +9,7 @@ using Databy.Reports.Views;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Databy.Reports;
+
 public sealed class App : Application
 {
     public IServiceProvider Services { get; private set; } = null!;

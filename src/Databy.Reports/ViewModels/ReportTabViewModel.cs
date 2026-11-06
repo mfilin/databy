@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Databy.Reports.Catalog;
@@ -12,6 +13,7 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
     public ReportDefinition Definition { get; }
     public string Title => Definition.Title;
     public string Code => Definition.Code;
+    public override string ToString() => Title;
 
     [ObservableProperty]
     private DataView? _rows;
@@ -27,6 +29,12 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(PageCount))]
     private int _previewRows;
 
+    [ObservableProperty]
+    private ObservableCollection<TableColumnViewModel> _tableColumns = [];
+
+    [ObservableProperty]
+    private ObservableCollection<TableRowViewModel> _tableRows = [];
+
     public ReportQueryResult? CurrentResult { get; private set; }
     public DataView? FullRows => CurrentResult?.Preview.Table.DefaultView;
 
@@ -41,6 +49,7 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
         PreviewRows = result.Preview.Table.Rows.Count;
         Page = 0;
         Rows = GetPageView(MainWindowViewModel.PageSize);
+        BuildTable();
         OnPropertyChanged(nameof(PagerCaption));
     }
 
@@ -65,11 +74,47 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
         return view;
     }
 
+    public void BuildTable()
+    {
+        var columns = Definition.Result?.Columns ?? new Dictionary<string, ColumnDefinition>();
+        var names = CurrentResult?.Preview.Table.Columns.Cast<DataColumn>()
+            .Where(column => columns.TryGetValue(column.ColumnName, out var definition) && definition.Hidden is false)
+            .Select(column => column.ColumnName)
+            .ToArray();
+        if (names is null)
+        {
+            TableColumns.Clear();
+            TableRows.Clear();
+            return;
+        }
+
+        TableColumns.Clear();
+        foreach (var name in names)
+        {
+            var definition = columns.TryGetValue(name, out var found) ? found : new ColumnDefinition();
+            TableColumns.Add(new TableColumnViewModel(name, string.IsNullOrWhiteSpace(definition.Title) ? name : definition.Title!, definition.Format));
+        }
+
+        TableRows.Clear();
+        if (TableColumns.Count > 0)
+        {
+            TableRows.Add(TableRowViewModel.Header(TableColumns));
+            if (Rows is not null)
+                foreach (DataRowView row in Rows)
+                    TableRows.Add(TableRowViewModel.From(row, TableColumns));
+        }
+        OnPropertyChanged(nameof(HasRows));
+    }
+
+    public bool HasRows => TableRows.Count > 1;
+
     public void Reset()
     {
         CurrentResult?.Dispose();
         CurrentResult = null;
         Rows = null;
+        TableColumns.Clear();
+        TableRows.Clear();
         PreviewRows = 0;
         TotalRows = 0;
         Page = 0;

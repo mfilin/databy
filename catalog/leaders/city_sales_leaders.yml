@@ -1,0 +1,26 @@
+code: leaders.city
+title: Лидеры города-продаж
+routine:
+  name: reports.fn_city_sales_leaders
+  kind: function
+  timeout_sec: 60
+parameters:
+  - name: p_from
+    type: date
+    label: Дата с
+    required: true
+    default: month_start
+  - name: p_to
+    type: date
+    label: Дата по
+    required: true
+    default: today
+result:
+  sheet: Лидеры городов
+  columns:
+    region: { title: Город }
+    quantity: { title: Количество, format: "#,##0" }
+    revenue: { title: Выручка, format: "#,##0.00" }
+    deals: { title: Сделок, format: "#,##0" }
+    top_product: { title: Топ-товар }
+roles: [admin, user]

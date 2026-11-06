@@ -30,7 +30,7 @@ public sealed partial class CatalogNode : ObservableObject
     {
         yield return this;
         foreach (var child in Children)
-        foreach (var node in child.Flatten())
-            yield return node;
+            foreach (var node in child.Flatten())
+                yield return node;
     }
 }

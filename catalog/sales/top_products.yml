@@ -1,0 +1,23 @@
+code: sales.top_products
+title: Топ товаров (int, string)
+routine:
+  name: reports.fn_top_products
+  kind: function
+  timeout_sec: 60
+parameters:
+  - name: p_limit
+    type: int
+    label: Сколько товаров
+    required: true
+    default: "5"
+  - name: p_region
+    type: string
+    label: Город
+    required: false
+result:
+  sheet: Топ товаров
+  columns:
+    product: { title: Товар }
+    quantity: { title: Количество, format: "#,##0" }
+    revenue: { title: Выручка, format: "#,##0.00" }
+roles: [admin, user]
