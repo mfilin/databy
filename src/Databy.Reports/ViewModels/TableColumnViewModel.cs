@@ -1,23 +1,33 @@
 using System.Globalization;
 using System.Data;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Databy.Reports.ViewModels;
 
-public sealed class TableColumnViewModel
+public sealed partial class TableColumnViewModel : ObservableObject
 {
+    public const double DefaultWidth = 160;
+    public const double MinimumWidth = 48;
+
     public TableColumnViewModel(string name, string title, string? format, int? width = null)
     {
         Name = name;
         Title = title;
         Format = format;
-        Width = width;
+        _width = width is { } pixel ? pixel : DefaultWidth;
     }
 
     public string Name { get; }
     public string Title { get; }
     public string? Format { get; }
-    public int? Width { get; }
-    public string WidthText => Width is null ? "*" : Width.Value.ToString(CultureInfo.InvariantCulture) + "px";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WidthText))]
+    private double _width;
+
+    public string WidthText => Width.ToString(CultureInfo.InvariantCulture) + "px";
+
+    public void Resize(double width) => Width = Math.Max(MinimumWidth, Math.Round(width));
 
     public string FormatValue(object? value) => value switch
     {
