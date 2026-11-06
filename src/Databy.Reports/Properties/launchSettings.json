@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Databy.Reports": {
+      "commandName": "Project",
+      "nativeDebugging": true,
+      "sqlDebugging": true
+    }
+  }
+}
