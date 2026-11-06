@@ -59,6 +59,64 @@ public sealed class HeadlessUiTests
         finally { window.Close(); viewModel.Dispose(); }
     }
 
+    [Fact]
+    public void Column_ResizeClampsToMinimumAndFormatsWidth()
+    {
+        var column = new TableColumnViewModel("amount", "Сумма", "#,##0.00");
+
+        Assert.Equal(TableColumnViewModel.DefaultWidth, column.Width);
+        Assert.Equal("160px", column.WidthText);
+
+        column.Resize(220.4);
+        Assert.Equal(220, column.Width);
+        Assert.Equal("220px", column.WidthText);
+
+        column.Resize(10);
+        Assert.Equal(TableColumnViewModel.MinimumWidth, column.Width);
+    }
+
+    [Fact]
+    public void Column_UsesConfiguredPixelWidthOverDefault()
+    {
+        var column = new TableColumnViewModel("amount", "Сумма", null, 240);
+
+        Assert.Equal(240, column.Width);
+        Assert.Equal("240px", column.WidthText);
+    }
+
+    [AvaloniaFact]
+    public void Ui_TableViewResizesRowGridsWhenColumnWidthChanges()
+    {
+        var (window, viewModel) = CreateWindow(amountFormat: "#,##0.00");
+        window.Show();
+        try
+        {
+            viewModel.OpenReport(MainWindowViewModelTests.FirstReport(viewModel));
+            var table = new DataTable();
+            table.Columns.Add("Amount", typeof(decimal));
+            table.Rows.Add(1m);
+            viewModel.SelectedTab!.Apply(new ReportQueryResult(new ReportPreview(table, 1), new TemporaryCsvStage(), 1));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.Measure(new Avalonia.Size(1200, 800));
+            window.Arrange(new Avalonia.Rect(0, 0, 1200, 800));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var tableView = window.ResultsTable;
+            var firstColumn = Assert.Single(viewModel.SelectedTab.TableColumns);
+            firstColumn.Width = 300;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.Measure(new Avalonia.Size(1200, 800));
+            window.Arrange(new Avalonia.Rect(0, 0, 1200, 800));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var grids = tableView.GetVisualDescendants().OfType<Grid>()
+                .Where(candidate => candidate.ColumnDefinitions.Count == 1).ToArray();
+            Assert.NotEmpty(grids);
+            Assert.All(grids, grid => Assert.Equal(300, grid.ColumnDefinitions[0].Width.Value));
+        }
+        finally { window.Close(); viewModel.Dispose(); }
+    }
+
     [AvaloniaFact]
     public void Ui_TabCloseButtonClosesTab()
     {
