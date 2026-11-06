@@ -61,6 +61,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private int _page;
 
     public bool IsReportSelected => SelectedTab is not null;
+    public string SelectedTabTitle => SelectedTab?.Title ?? "Отчёт не выбран";
+    public IEnumerable<TableColumnViewModel> SelectedTabColumns => SelectedTab?.TableColumns ?? [];
+    public IEnumerable<TableRowViewModel> SelectedTabRows => SelectedTab?.TableRows ?? [];
     public bool CanRun => SelectedTab is not null && !IsBusy;
     public bool CanExport => SelectedTab?.CurrentResult is not null && !IsBusy;
     public bool CanGoBack => Page > 0 && !IsBusy;
@@ -161,6 +164,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (value is not null)
             foreach (var column in value.Definition.Result?.Columns ?? new Dictionary<string, ColumnDefinition>())
                 Columns.Add(new ReportColumnViewModel(column.Key, column.Value));
+        OnPropertyChanged(nameof(SelectedTabTitle));
+        OnPropertyChanged(nameof(SelectedTabColumns));
+        OnPropertyChanged(nameof(SelectedTabRows));
         OnPropertyChanged(nameof(HasColumns));
         OnPropertyChanged(nameof(HasData));
         OnPropertyChanged(nameof(ShowEmptyState));
