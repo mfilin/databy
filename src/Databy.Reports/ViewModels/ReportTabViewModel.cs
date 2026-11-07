@@ -35,6 +35,16 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ObservableCollection<TableRowViewModel> _tableRows = [];
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotLoading))]
+    private bool _isLoading;
+
+    public bool IsNotLoading => !IsLoading;
+
+    public CancellationTokenSource? RunCancellation { get; set; }
+
+    public void CancelRun() => RunCancellation?.Cancel();
+
     public ReportQueryResult? CurrentResult { get; private set; }
     public DataView? FullRows => CurrentResult?.Preview.Table.DefaultView;
 
@@ -110,6 +120,9 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
 
     public void Reset()
     {
+        RunCancellation?.Dispose();
+        RunCancellation = null;
+        IsLoading = false;
         CurrentResult?.Dispose();
         CurrentResult = null;
         Rows = null;

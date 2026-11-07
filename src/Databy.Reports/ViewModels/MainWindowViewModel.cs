@@ -15,7 +15,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IReportQueryService _queryService;
     private readonly IReportExportService _exportService;
     private readonly IReportAuditService _auditService;
-    private CancellationTokenSource? _runCts;
 
     public MainWindowViewModel(
         IReportCatalogService catalogService,
@@ -231,12 +230,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand(CanExecute = nameof(CanRun))]
-    private async Task RunAsync()
+    private Task RunAsync() => SelectedTab is { } tab ? RunReportAsync(tab) : Task.CompletedTask;
+
+    private async Task RunReportAsync(ReportTabViewModel tab)
     {
-        if (SelectedTab is not { } tab) return;
-        _runCts = new CancellationTokenSource();
+        if (tab.IsLoading) return;
+        var cts = new CancellationTokenSource();
+        tab.RunCancellation?.Dispose();
+        tab.RunCancellation = cts;
+        tab.IsLoading = true;
         IsBusy = true;
-        Status = "Выполняется запрос…";
+        Status = $"Выполняется запрос… ({tab.Title})";
         var startedAt = DateTimeOffset.UtcNow;
         ReportQueryResult? result = null;
         var applied = false;
@@ -244,19 +248,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             var parameters = BuildParameters(tab.Definition);
             _auditService.ReportStarted(tab.Definition, parameters);
-            result = await _queryService.ExecuteAsync(tab.Definition, parameters, _runCts.Token);
-            await EnsureMinimumLoadingTimeAsync(startedAt, _runCts.Token);
-            _runCts.Token.ThrowIfCancellationRequested();
+            result = await _queryService.ExecuteAsync(tab.Definition, parameters, cts.Token);
+            await EnsureMinimumLoadingTimeAsync(startedAt, cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
             tab.Apply(result);
             applied = true;
-            Page = 0;
+            if (ReferenceEquals(SelectedTab, tab)) Page = 0;
             Status = $"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
                      (tab.TotalRows > tab.PreviewRows ? " (превью ограничено)" : string.Empty);
             _auditService.ReportSucceeded(tab.Definition, tab.TotalRows, ElapsedMs(startedAt));
         }
         catch (OperationCanceledException)
         {
-            Status = "Запуск отменён";
+            Status = $"Запуск отменён: {tab.Title}";
             _auditService.ReportCanceled(tab.Definition, ElapsedMs(startedAt));
         }
         catch (Exception ex)
@@ -268,16 +272,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         finally
         {
             if (!applied) result?.Dispose();
-            IsBusy = false;
-            _runCts?.Dispose();
-            _runCts = null;
+            tab.IsLoading = false;
+            if (ReferenceEquals(tab.RunCancellation, cts))
+            {
+                tab.RunCancellation = null;
+                cts.Dispose();
+            }
+            IsBusy = Tabs.Any(other => other.IsLoading);
             OnPropertyChanged(nameof(CanExport));
             NotifyLayoutChanged();
         }
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
-    private void Cancel() => _runCts?.Cancel();
+    private void Cancel() => SelectedTab?.CancelRun();
 
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task ExportAsync()
@@ -434,7 +442,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _runCts?.Dispose();
         foreach (var tab in Tabs) tab.Dispose();
     }
 }

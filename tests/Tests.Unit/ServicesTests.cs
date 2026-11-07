@@ -225,9 +225,10 @@ public sealed class MainWindowViewModelTests
 
             Assert.NotNull(stage);
             Assert.False(File.Exists(stage!.Path), "Временный stage-файл должен быть удалён после отмены");
-            Assert.Equal("Запуск отменён", viewModel.Status);
+            Assert.StartsWith("Запуск отменён", viewModel.Status);
             Assert.Null(tab.CurrentResult);
             Assert.False(viewModel.HasData);
+            Assert.False(tab.IsLoading);
         }
         finally { viewModel.Dispose(); }
     }
