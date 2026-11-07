@@ -1,0 +1,15 @@
+code: ERCMCP.detal_potentially
+title: Детализация потенц. предпр. по Москве
+routine:
+  name: programm_reports.cube_ercmcp_dashboard_detal_potentially_mf
+  kind: function
+  timeout_sec: 60
+result:
+  sheet: Детализация
+  columns:
+    ogrn: { title: ОГРН }
+    inn: { title: ИНН }
+    name_org: { title: "Наименование организации" }
+    name_: { title: name_ }
+    name_full_: { title: name_full_ }
+roles: [admin, user]

@@ -11,6 +11,9 @@ using Databy.Reports.ViewModels;
 
 namespace Databy.Reports.Views;
 
+/// <summary>Grid строки таблицы; только у таких сеток меняются ширины колонок.</summary>
+public sealed class TableRowGrid : Grid;
+
 public sealed class TableView : ListBox
 {
     public static readonly StyledProperty<IEnumerable<TableColumnViewModel>?> ColumnsSourceProperty =
@@ -23,16 +26,13 @@ public sealed class TableView : ListBox
     private static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#F5F8FC"));
     private static readonly IBrush ResizeBrush = new SolidColorBrush(Color.Parse("#C9D4E4"));
 
-    private readonly List<Grid> _rowGrids = [];
+    private readonly List<TableRowGrid> _rowGrids = [];
+    private readonly HashSet<TableColumnViewModel> _subscribedColumns = [];
+    private INotifyCollectionChanged? _subscribedCollection;
     private TableColumnViewModel? _resizingColumn;
+    private Border? _activeHandle;
     private double _resizeStartX;
     private double _resizeStartWidth;
-
-    static TableView()
-    {
-        ScrollViewer.HorizontalScrollBarVisibilityProperty.OverrideDefaultValue<TableView>(ScrollBarVisibility.Auto);
-        ScrollViewer.VerticalScrollBarVisibilityProperty.OverrideDefaultValue<TableView>(ScrollBarVisibility.Auto);
-    }
 
     protected override Type StyleKeyOverride => typeof(ListBox);
 
@@ -43,6 +43,24 @@ public sealed class TableView : ListBox
         BorderThickness = new Thickness(0);
         Padding = new Thickness(0);
         SelectionMode = SelectionMode.Multiple;
+        ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel());
+        ScrollViewer.SetHorizontalScrollBarVisibility(this, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(this, ScrollBarVisibility.Auto);
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        if (e.NameScope.Find<Avalonia.Controls.Presenters.ItemsPresenter>("PART_ItemsPresenter") is { } presenter)
+            presenter.HorizontalAlignment = HorizontalAlignment.Left;
+    }
+
+    protected override void PrepareContainerForItemOverride(Control container, object? item, int index)
+    {
+        base.PrepareContainerForItemOverride(container, item, index);
+        if (container is not ListBoxItem listBoxItem) return;
+        listBoxItem.HorizontalAlignment = HorizontalAlignment.Left;
+        listBoxItem.HorizontalContentAlignment = HorizontalAlignment.Left;
     }
 
     public IEnumerable<TableColumnViewModel>? ColumnsSource
@@ -68,53 +86,96 @@ public sealed class TableView : ListBox
         else if (change.Property == ColumnsSourceProperty)
         {
             _rowGrids.Clear();
+            ResubscribeColumns();
             if (RowsSource is not null) ItemsSource = RowsSource;
-            SubscribeToColumns();
-            ApplyColumnWidths();
-        }
-    }
-
-    private void SubscribeToColumns()
-    {
-        if (ColumnsSource is null) return;
-        foreach (var column in ColumnsSource)
-            column.PropertyChanged -= OnColumnPropertyChanged;
-        foreach (var column in ColumnsSource)
-            column.PropertyChanged += OnColumnPropertyChanged;
-
-        if (ColumnsSource is INotifyCollectionChanged notifying)
-        {
-            notifying.CollectionChanged -= (_, _) => SubscribeToColumns();
-            notifying.CollectionChanged += (_, _) => SubscribeToColumns();
         }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        SubscribeToColumns();
-        ApplyColumnWidths();
+        ResubscribeColumns();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        UnsubscribeColumns();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void ResubscribeColumns()
+    {
+        UnsubscribeColumns();
+        if (ColumnsSource is null) return;
+
+        foreach (var column in ColumnsSource)
+            SubscribeColumn(column);
+
+        if (ColumnsSource is INotifyCollectionChanged collection)
+        {
+            _subscribedCollection = collection;
+            collection.CollectionChanged += OnColumnsCollectionChanged;
+        }
+    }
+
+    private void UnsubscribeColumns()
+    {
+        foreach (var column in _subscribedColumns)
+        {
+            column.PropertyChanged -= OnColumnPropertyChanged;
+        }
+        _subscribedColumns.Clear();
+
+        if (_subscribedCollection is not null)
+        {
+            _subscribedCollection.CollectionChanged -= OnColumnsCollectionChanged;
+            _subscribedCollection = null;
+        }
+    }
+
+    private void SubscribeColumn(TableColumnViewModel column)
+    {
+        if (!_subscribedColumns.Add(column)) return;
+        column.PropertyChanged += OnColumnPropertyChanged;
+    }
+
+    private void OnColumnsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (TableColumnViewModel column in e.OldItems)
+            {
+                column.PropertyChanged -= OnColumnPropertyChanged;
+                _subscribedColumns.Remove(column);
+            }
+        }
+        if (e.NewItems is not null)
+        {
+            foreach (TableColumnViewModel column in e.NewItems)
+                SubscribeColumn(column);
+        }
+        if (e.Action == NotifyCollectionChangedAction.Reset && ColumnsSource is not null)
+        {
+            _subscribedColumns.Clear();
+            foreach (var column in ColumnsSource)
+                SubscribeColumn(column);
+        }
     }
 
     private void OnColumnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(TableColumnViewModel.Width)) return;
-        ApplyColumnWidths();
+        if (e.PropertyName == nameof(TableColumnViewModel.Width)) ApplyColumnWidths();
     }
 
-    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
-    {
-        base.OnApplyTemplate(e);
-        ApplyColumnWidths();
-    }
 
     private Control BuildRow(TableRowViewModel? row)
     {
-        var grid = new Grid
+        var grid = new TableRowGrid
         {
             MinHeight = 32,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             ColumnDefinitions = BuildColumnDefinitions(),
+            MinWidth = ColumnsSource?.Sum(column => column.Width) ?? 0,
             Background = row?.IsHeader == true ? HeaderBrush : Brushes.Transparent
         };
         if (row is null) return grid;
@@ -137,18 +198,18 @@ public sealed class TableView : ListBox
             Grid.SetColumn(cell, index);
             grid.Children.Add(cell);
 
-            if (row.IsHeader && index < row.Cells.Length - 1)
-                grid.Children.Add(BuildResizeHandle(index));
+            if (row.IsHeader)
+                grid.Children.Add(BuildResizeHandle(index, row.Cells.Length));
         }
 
         _rowGrids.Add(grid);
-        grid.AttachedToVisualTree += (_, _) => ApplyColumnWidths();
         grid.DetachedFromVisualTree += (_, _) => _rowGrids.Remove(grid);
         return grid;
     }
 
-    private Control BuildResizeHandle(int columnIndex)
+    private Control BuildResizeHandle(int columnIndex, int columnCount)
     {
+        var isLast = columnIndex == columnCount - 1;
         var handle = new Border
         {
             Width = 7,
@@ -156,7 +217,8 @@ public sealed class TableView : ListBox
             HorizontalAlignment = HorizontalAlignment.Right,
             Cursor = new Cursor(StandardCursorType.SizeWestEast),
             Tag = columnIndex,
-            ZIndex = 1
+            ZIndex = 1,
+            Margin = isLast ? new Thickness(0, 0, 7, 0) : default
         };
         handle.PointerPressed += OnResizePressed;
         handle.PointerMoved += OnResizeMoved;
@@ -164,21 +226,15 @@ public sealed class TableView : ListBox
         handle.PointerEntered += (_, _) => handle.Background = ResizeBrush;
         handle.PointerExited += (_, _) => { if (_resizingColumn is null) handle.Background = Brushes.Transparent; };
 
-        var overlay = new Panel { HorizontalAlignment = HorizontalAlignment.Right, Width = 7, Tag = columnIndex, ZIndex = 1 };
-        overlay.Children.Add(handle);
-        overlay.PointerPressed += OnResizePressed;
-        overlay.PointerMoved += OnResizeMoved;
-        overlay.PointerReleased += OnResizeReleased;
-        overlay.PointerEntered += (_, _) => handle.Background = ResizeBrush;
-        overlay.PointerExited += (_, _) => { if (_resizingColumn is null) handle.Background = Brushes.Transparent; };
-        Grid.SetColumn(overlay, columnIndex);
-        return overlay;
+        Grid.SetColumn(handle, columnIndex);
+        return handle;
     }
 
     private void OnResizePressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Control { Tag: int index } || ColumnsSource?.ToArray() is not { } columns || index >= columns.Length) return;
-        e.Pointer.Capture(sender as IInputElement);
+        if (sender is not Border { Tag: int index } border || ColumnsSource?.ToArray() is not { } columns || index >= columns.Length) return;
+        e.Pointer.Capture(border);
+        _activeHandle = border;
         _resizingColumn = columns[index];
         _resizeStartX = e.GetPosition(this).X;
         _resizeStartWidth = _resizingColumn.Width;
@@ -187,19 +243,20 @@ public sealed class TableView : ListBox
 
     private void OnResizeMoved(object? sender, PointerEventArgs e)
     {
-        if (_resizingColumn is null || e.Pointer.Captured is not Control) return;
+        if (_resizingColumn is null) return;
         var delta = e.GetPosition(this).X - _resizeStartX;
         _resizingColumn.Resize(_resizeStartWidth + delta);
-        ApplyColumnWidths();
         e.Handled = true;
     }
 
     private void OnResizeReleased(object? sender, PointerReleasedEventArgs e)
     {
+        var handle = sender as Border ?? _activeHandle;
+        if (handle is not null) handle.Background = Brushes.Transparent;
         if (_resizingColumn is null) return;
         _resizingColumn = null;
+        _activeHandle = null;
         e.Pointer.Capture(null);
-        if (sender is Border { } border) border.Background = Brushes.Transparent;
         e.Handled = true;
     }
 
@@ -207,14 +264,23 @@ public sealed class TableView : ListBox
     {
         var columns = ColumnsSource?.ToArray();
         if (columns is null || columns.Length == 0) return;
-        foreach (var grid in _rowGrids.Concat(this.GetVisualDescendants().OfType<Grid>()).Distinct().ToArray())
+        var totalWidth = columns.Sum(column => column.Width);
+        for (var index = _rowGrids.Count - 1; index >= 0; index--)
         {
+            var grid = _rowGrids[index];
             if (grid.ColumnDefinitions.Count != columns.Length) continue;
-            for (var index = 0; index < columns.Length; index++)
-                grid.ColumnDefinitions[index].Width = new GridLength(columns[index].Width, GridUnitType.Pixel);
+            for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
+                grid.ColumnDefinitions[columnIndex].Width = new GridLength(columns[columnIndex].Width, GridUnitType.Pixel);
+            grid.MinWidth = totalWidth;
             grid.InvalidateMeasure();
-            grid.InvalidateArrange();
+            if (grid.Parent is Layoutable container)
+            {
+                container.MinWidth = totalWidth;
+                container.InvalidateMeasure();
+                (container.Parent as Layoutable)?.InvalidateMeasure();
+            }
         }
+        InvalidateMeasure();
     }
 
     private ColumnDefinitions BuildColumnDefinitions()
