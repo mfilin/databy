@@ -184,7 +184,7 @@ public sealed class ExportTests
             ["amount"] = new() { Title = "Итого", Format = "#,##0.00" },
             ["secret"] = new() { Hidden = true }
         };
-        new ReportExportWriter().Save(stage, table, path, "Продажи", options, table.Rows.Count);
+        new ReportExportWriter().Save(stage, table, path, "Продажи", new ResultDefinition { Columns = options }, table.Rows.Count);
         using var reader = ExcelReaderFactory.CreateReader(File.OpenRead(path));
         Assert.True(reader.Read());
         Assert.Equal(new[] { "Дата сделки", "Итого", "text", "empty" }, Enumerable.Range(0, reader.FieldCount).Select(reader.GetString).ToArray());
@@ -243,7 +243,7 @@ public sealed class ExportTests
             ["empty"] = new() { Title = "Пусто" },
             ["secret"] = new() { Hidden = true }
         };
-        new ReportExportWriter().Save(stage, table, path, null, options, table.Rows.Count);
+        new ReportExportWriter().Save(stage, table, path, null, new ResultDefinition { Columns = options }, table.Rows.Count);
         var (header, row) = ReadCsvRows(path, 2);
         Assert.Equal(new[] { "Дата сделки", "Итого", "text", "Пусто" }, header);
         Assert.DoesNotContain("secret", string.Join(";", header));

@@ -23,32 +23,38 @@ public sealed class ReportExportWriter
     public const string NullMarker = "\\N";
 
     public ExportResult Save(string stagedCsv, DataTable schema, string targetPath, string? sheetName,
-        IReadOnlyDictionary<string, ColumnDefinition>? columnOptions, long rowCount,
-        int excelDataRowLimit = DefaultExcelDataRowLimit)
+            ResultDefinition? result, long rowCount,
+            int excelDataRowLimit = DefaultExcelDataRowLimit)
     {
         if (!File.Exists(stagedCsv)) throw new FileNotFoundException("Временная выгрузка не найдена", stagedCsv);
+
+        var databaseColumns = schema.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
+        var visible = ResultColumns.Resolve(databaseColumns, result, out var unknownHidden);
+        if (unknownHidden.Count > 0)
+            Serilog.Log.Warning("Экспорт: в result.hide указаны отсутствующие колонки: {Columns}", string.Join(", ", unknownHidden));
+        if (visible.Count == 0)
+            throw new InvalidOperationException("Все колонки скрыты в YAML отчёта");
+
+        var indexes = visible.Select(column => schema.Columns.IndexOf(column.Name)).ToArray();
+
         if (rowCount > excelDataRowLimit)
         {
             var csvPath = Path.ChangeExtension(targetPath, ".csv");
-            WriteUserCsv(stagedCsv, schema, csvPath, columnOptions);
+            WriteUserCsv(stagedCsv, schema, csvPath, visible, indexes);
             return new(csvPath, "CSV", rowCount, true);
         }
         if (string.Equals(Path.GetExtension(targetPath), ".csv", StringComparison.OrdinalIgnoreCase))
         {
-            WriteUserCsv(stagedCsv, schema, targetPath, columnOptions);
+            WriteUserCsv(stagedCsv, schema, targetPath, visible, indexes);
             return new(targetPath, "CSV", rowCount, false);
         }
-        WriteWorkbook(stagedCsv, schema, targetPath, sheetName, columnOptions);
+        WriteWorkbook(stagedCsv, schema, targetPath, sheetName, visible, indexes);
         return new(targetPath, "XLSX", rowCount, false);
     }
 
     private static void WriteUserCsv(string stagedCsv, DataTable schema, string targetPath,
-        IReadOnlyDictionary<string, ColumnDefinition>? columnOptions)
+        IReadOnlyList<ResultColumn> visible, IReadOnlyList<int> indexes)
     {
-        var visible = Enumerable.Range(0, schema.Columns.Count)
-            .Where(i => !TryGetOption(columnOptions, schema.Columns[i].ColumnName, out var option) || !option.Hidden)
-            .ToArray();
-
         using var writer = new StreamWriter(targetPath, false, new UTF8Encoding(true)) { NewLine = "\r\n" };
         using var parser = new TextFieldParser(stagedCsv, Encoding.UTF8)
         {
@@ -59,17 +65,13 @@ public sealed class ReportExportWriter
         parser.SetDelimiters(";");
         _ = parser.ReadFields(); // stage headers are database names; user headers come from YAML
 
-        WriteUserCsvRecord(writer, visible.Select(index =>
-        {
-            var name = schema.Columns[index].ColumnName;
-            return TryGetOption(columnOptions, name, out var option) && !string.IsNullOrWhiteSpace(option.Title) ? option.Title : name;
-        }));
+        WriteUserCsvRecord(writer, visible.Select(column => column.Title));
 
         while (!parser.EndOfData)
         {
             var fields = parser.ReadFields() ?? [];
             if (fields.Length != schema.Columns.Count) throw new InvalidDataException("Временная CSV-выгрузка повреждена");
-            WriteUserCsvRecord(writer, visible.Select(index => FormatUserField(fields[index], schema.Columns[index].DataType)));
+            WriteUserCsvRecord(writer, indexes.Select(index => FormatUserField(fields[index], schema.Columns[index].DataType)));
         }
     }
 
@@ -111,17 +113,13 @@ public sealed class ReportExportWriter
     }
 
     private static void WriteWorkbook(string stagedCsv, DataTable schema, string targetPath, string? sheetName,
-        IReadOnlyDictionary<string, ColumnDefinition>? columnOptions)
+            IReadOnlyList<ResultColumn> visible, IReadOnlyList<int> indexes)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add(CleanSheetName(sheetName));
-        var visible = Enumerable.Range(0, schema.Columns.Count)
-            .Where(i => !TryGetOption(columnOptions, schema.Columns[i].ColumnName, out var option) || !option.Hidden)
-            .ToArray();
-        for (var c = 0; c < visible.Length; c++)
+        for (var c = 0; c < visible.Count; c++)
         {
-            var name = schema.Columns[visible[c]].ColumnName;
-            worksheet.Cell(1, c + 1).Value = TryGetOption(columnOptions, name, out var option) && !string.IsNullOrWhiteSpace(option.Title) ? option.Title : name;
+            worksheet.Cell(1, c + 1).Value = visible[c].Title;
             worksheet.Cell(1, c + 1).Style.Font.Bold = true;
         }
 
@@ -138,32 +136,21 @@ public sealed class ReportExportWriter
         {
             var fields = parser.ReadFields() ?? [];
             if (fields.Length != schema.Columns.Count) throw new InvalidDataException("Временная CSV-выгрузка повреждена");
-            for (var c = 0; c < visible.Length; c++)
+            for (var c = 0; c < visible.Count; c++)
             {
-                var sourceColumn = visible[c];
+                var sourceColumn = indexes[c];
                 var field = fields[sourceColumn];
                 if (field == NullMarker) continue;
                 var cell = worksheet.Cell(row, c + 1);
                 cell.Value = ToCellValue(field, schema.Columns[sourceColumn].DataType);
-                if (TryGetOption(columnOptions, schema.Columns[sourceColumn].ColumnName, out var option) && !string.IsNullOrWhiteSpace(option.Format))
-                    cell.Style.NumberFormat.Format = option.Format;
+                if (!string.IsNullOrWhiteSpace(visible[c].Format))
+                    cell.Style.NumberFormat.Format = visible[c].Format;
             }
             row++;
         }
         worksheet.SheetView.FreezeRows(1);
-        if (visible.Length > 0) worksheet.Range(1, 1, Math.Max(1, row - 1), visible.Length).SetAutoFilter();
+        if (visible.Count > 0) worksheet.Range(1, 1, Math.Max(1, row - 1), visible.Count).SetAutoFilter();
         workbook.SaveAs(targetPath);
-    }
-
-    private static bool TryGetOption(IReadOnlyDictionary<string, ColumnDefinition>? options, string name, out ColumnDefinition option)
-    {
-        if (options is not null)
-        {
-            foreach (var pair in options)
-                if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase)) { option = pair.Value; return true; }
-        }
-        option = null!;
-        return false;
     }
 
     private static XLCellValue ToCellValue(string value, Type type)

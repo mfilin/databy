@@ -86,26 +86,24 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
 
     public void BuildTable()
     {
-        var columns = Definition.Result?.Columns ?? new Dictionary<string, ColumnDefinition>();
-        var names = CurrentResult?.Preview.Table.Columns.Cast<DataColumn>()
-            .Where(column => columns.TryGetValue(column.ColumnName, out var definition) && definition.Hidden is false)
-            .Select(column => column.ColumnName)
-            .ToArray();
-        if (names is null)
+        TableColumns.Clear();
+        TableRows.Clear();
+
+        if (CurrentResult is null)
         {
-            TableColumns.Clear();
-            TableRows.Clear();
+            OnPropertyChanged(nameof(HasRows));
             return;
         }
 
-        TableColumns.Clear();
-        foreach (var name in names)
-        {
-            var definition = columns.TryGetValue(name, out var found) ? found : new ColumnDefinition();
-            TableColumns.Add(new TableColumnViewModel(name, string.IsNullOrWhiteSpace(definition.Title) ? name : definition.Title!, definition.Format));
-        }
+        var databaseColumns = CurrentResult.Preview.Table.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
+        var columns = ResultColumns.Resolve(databaseColumns, Definition.Result, out var unknownHidden);
+        if (unknownHidden.Count > 0)
+            Serilog.Log.Warning("Отчёт {ReportCode}: в result.hide указаны отсутствующие колонки: {Columns}",
+                Code, string.Join(", ", unknownHidden));
 
-        TableRows.Clear();
+        foreach (var column in columns)
+            TableColumns.Add(new TableColumnViewModel(column.Name, column.Title, column.Format));
+
         if (TableColumns.Count > 0)
         {
             TableRows.Add(TableRowViewModel.Header(TableColumns));

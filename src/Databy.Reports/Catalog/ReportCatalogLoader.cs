@@ -72,8 +72,26 @@ public sealed class ReportCatalogLoader
             catch (FormatException ex) { return ex.Message; }
         }
 
+        var resultIssue = ValidateResult(report.Result);
+        if (resultIssue is not null) return resultIssue;
+
         var invalidRole = report.Roles.FirstOrDefault(role => !Roles.Contains(role));
         return invalidRole is null ? null : $"Недопустимая роль '{invalidRole}'";
+    }
+
+    private static string? ValidateResult(ResultDefinition? result)
+    {
+        if (result is null || result.Hide.Count == 0) return null;
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in result.Hide)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "В result.hide указано пустое имя колонки";
+            if (!seen.Add(name)) return $"В result.hide повторяется колонка '{name}'";
+            if (result.Columns.TryGetValue(name, out var definition) && !definition.Hidden)
+                return $"Колонка '{name}' одновременно указана в result.hide и имеет hidden: false";
+        }
+        return null;
     }
 
     public static DateOnly ResolveDateDefault(string value, DateOnly today) => value switch
@@ -97,5 +115,10 @@ public sealed class ReportDefinition
 }
 public sealed class RoutineDefinition { public string Name { get; set; } = ""; public string Kind { get; set; } = "function"; public int TimeoutSec { get; set; } = 60; }
 public sealed class ParameterDefinition { public string Name { get; set; } = ""; public string Type { get; set; } = ""; public string Label { get; set; } = ""; public bool Required { get; set; } public string? Default { get; set; } }
-public sealed class ResultDefinition { public string? Sheet { get; set; } public Dictionary<string, ColumnDefinition> Columns { get; set; } = new(StringComparer.OrdinalIgnoreCase); }
+public sealed class ResultDefinition
+{
+    public string? Sheet { get; set; }
+    public List<string> Hide { get; set; } = [];
+    public Dictionary<string, ColumnDefinition> Columns { get; set; } = new(StringComparer.Ordinal);
+}
 public sealed class ColumnDefinition { public string? Title { get; set; } public string? Format { get; set; } public bool Hidden { get; set; } }

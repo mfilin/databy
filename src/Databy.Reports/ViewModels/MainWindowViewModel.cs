@@ -251,6 +251,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             result = await _queryService.ExecuteAsync(tab.Definition, parameters, cts.Token);
             await EnsureMinimumLoadingTimeAsync(startedAt, cts.Token);
             cts.Token.ThrowIfCancellationRequested();
+            EnsureVisibleColumns(tab, result);
             tab.Apply(result);
             applied = true;
             if (ReferenceEquals(SelectedTab, tab)) Page = 0;
@@ -282,6 +283,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(CanExport));
             NotifyLayoutChanged();
         }
+    }
+
+    private static void EnsureVisibleColumns(ReportTabViewModel tab, ReportQueryResult result)
+    {
+        var databaseColumns = result.Preview.Table.Columns.Cast<System.Data.DataColumn>().Select(column => column.ColumnName);
+        var visible = ResultColumns.Resolve(databaseColumns, tab.Definition.Result);
+        if (visible.Count == 0)
+            throw new InvalidOperationException("Все колонки скрыты в YAML отчёта");
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
