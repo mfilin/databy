@@ -67,6 +67,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsReportSelected => SelectedTab is not null;
     public string SelectedTabTitle => SelectedTab?.Title ?? "Отчёт не выбран";
+    public bool HasReportParameters => SelectedTab?.Definition.Parameters.Count > 0;
+    public bool HasDateParameters => SelectedTab?.Definition.Parameters
+        .Any(parameter => string.Equals(parameter.Type, "date", StringComparison.OrdinalIgnoreCase)) == true;
+    public bool HasNoParameters => SelectedTab is not null && !HasReportParameters;
     public IEnumerable<TableColumnViewModel> SelectedTabColumns => SelectedTab?.TableColumns ?? [];
     public IEnumerable<TableRowViewModel> SelectedTabRows => SelectedTab?.TableRows ?? [];
     public bool CanRun => SelectedTab is not null && !IsBusy;
@@ -170,6 +174,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             foreach (var column in value.Definition.Result?.Columns ?? new Dictionary<string, ColumnDefinition>())
                 Columns.Add(new ReportColumnViewModel(column.Key, column.Value));
         OnPropertyChanged(nameof(SelectedTabTitle));
+        OnPropertyChanged(nameof(HasReportParameters));
+        OnPropertyChanged(nameof(HasDateParameters));
+        OnPropertyChanged(nameof(HasNoParameters));
         OnPropertyChanged(nameof(SelectedTabColumns));
         OnPropertyChanged(nameof(SelectedTabRows));
         OnPropertyChanged(nameof(HasColumns));
