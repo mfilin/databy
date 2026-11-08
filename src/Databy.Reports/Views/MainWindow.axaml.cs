@@ -25,8 +25,10 @@ public sealed partial class MainWindow : Window
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (ViewModel is { } viewModel)
-            viewModel.ExportPathProvider = PickExportPathAsync;
+        if (ViewModel is not { } viewModel) return;
+        viewModel.ExportPathProvider = PickExportPathAsync;
+        viewModel.ClipboardServiceFactory = () => TopLevel.GetTopLevel(this) is { } top ? new AvaloniaClipboardService(top) : null;
+        viewModel.FilePickerServiceFactory = () => TopLevel.GetTopLevel(this) is { } top ? new AvaloniaFilePickerService(top) : null;
     }
 
     private async Task<string?> PickExportPathAsync(ReportTabViewModel tab)

@@ -5,6 +5,7 @@ using Databy.Reports.Input;
 namespace Tests.Unit;
 
 [Trait("Category", "T1")]
+[Collection("temp-stage")]
 public sealed class InputParserTests
 {
     private static InputParseOptions Options(bool hasHeader = false, params string[] columns) => new()
@@ -148,27 +149,35 @@ public sealed class InputParserTests
     [Fact]
     public void Ip10_MaxRowsExceededThrowsAndDeletesStage()
     {
-        var before = Directory.GetFiles(Path.GetTempPath(), "databy-input-*.csv").Length;
+        var before = CountStages();
         var parser = new ListInputParser();
         var text = string.Join('\n', Enumerable.Range(1, 10).Select(i => i.ToString()));
 
         var ex = Assert.Throws<InvalidOperationException>(() => parser.ParseText(text, new InputParseOptions { MaxRows = 5 }));
 
         Assert.Contains("Превышен лимит", ex.Message);
-        Assert.Equal(before, Directory.GetFiles(Path.GetTempPath(), "databy-input-*.csv").Length);
+        Assert.True(CountStages() <= before, "Stage должен быть удалён при превышении лимита");
     }
 
     [Fact]
     public void Ip11_CancellationRemovesStage()
     {
-        var before = Directory.GetFiles(Path.GetTempPath(), "databy-input-*.csv").Length;
+        var before = CountStages();
         using var cts = new CancellationTokenSource();
         var text = string.Join('\n', Enumerable.Range(1, 5000).Select(i => i.ToString()));
-        var progress = new Progress<long>(_ => cts.Cancel());
+        var progress = new InlineProgress<long>(_ => cts.Cancel());
 
         Assert.ThrowsAny<OperationCanceledException>(() =>
             new ListInputParser().ParseText(text, new InputParseOptions(), cts.Token, progress));
-        Assert.Equal(before, Directory.GetFiles(Path.GetTempPath(), "databy-input-*.csv").Length);
+        Assert.True(CountStages() <= before, "Stage должен быть удалён при отмене");
+    }
+
+    private static int CountStages() =>
+        Directory.GetFiles(Path.GetTempPath(), "databy-input-*.csv").Length;
+
+    private sealed class InlineProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
     }
 
     [Fact]

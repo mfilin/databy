@@ -239,6 +239,51 @@
                          HorizontalAlignment="Center" />
             </StackPanel>
 
+            <!-- Предпросмотр списка значений, пока отчёт не выполнен -->
+            <Border IsVisible="{Binding HasListPreview}" Background="{StaticResource Surface}"
+                    DataContext="{Binding SelectedListInput}">
+              <Grid RowDefinitions="Auto,*">
+                <TextBlock Text="Предпросмотр списка" FontWeight="SemiBold" FontSize="12" Margin="12,10,12,4"
+                           Foreground="{StaticResource TextPrimary}" />
+                <ScrollViewer Grid.Row="1">
+                  <StackPanel Margin="12,0,12,12" Spacing="2">
+                    <ItemsControl ItemsSource="{Binding PreviewHeaders}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="11" Width="140"
+                                     Foreground="{StaticResource TextPrimary}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding PreviewRows}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:InputPreviewRowViewModel">
+                          <ItemsControl ItemsSource="{Binding Cells}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <TextBlock Text="{Binding}" FontSize="11" Width="140"
+                                           TextTrimming="CharacterEllipsis" />
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </ScrollViewer>
+              </Grid>
+            </Border>
+
             <Border IsVisible="{Binding SelectedTab.IsLoading}" Background="#66000000">
               <Border Background="{StaticResource Surface}" CornerRadius="8" Padding="24,14"
                       HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -295,6 +340,47 @@
           </StackPanel>
           <Button Classes="primary" Command="{Binding RunCommand}" Content="Применить"
                   IsVisible="{Binding HasReportParameters}" HorizontalAlignment="Stretch" />
+
+          <!-- Список значений -->
+          <StackPanel Spacing="10" IsVisible="{Binding HasListInput}"
+                      DataContext="{Binding SelectedListInput}">
+            <Border BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0" Padding="0,10,0,0" />
+            <TextBlock Text="Список значений" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Classes="tool" Command="{Binding PasteCommand}" Content="Вставить из буфера" />
+              <Button Classes="tool" Command="{Binding LoadFileCommand}" Content="Загрузить файл…" />
+              <Button Classes="tool" Command="{Binding ClearCommand}" Content="Очистить" />
+            </StackPanel>
+            <CheckBox IsChecked="{Binding FirstRowIsHeader, Mode=TwoWay}" Content="Первая строка — заголовок" />
+            <TextBlock Text="{Binding SourceName}" Foreground="{StaticResource TextMuted}" FontSize="12"
+                       IsVisible="{Binding HasSource}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Counters}" FontSize="12" Foreground="{StaticResource TextPrimary}" />
+            <ProgressBar IsIndeterminate="True" Height="3" IsVisible="{Binding IsParsing}"
+                         Foreground="{StaticResource Primary}" />
+            <TextBlock Text="{Binding ParseError}" Foreground="#B42318" FontSize="12" TextWrapping="Wrap" />
+
+            <ItemsControl ItemsSource="{Binding Columns}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ColumnMappingViewModel">
+                  <StackPanel Spacing="2" Margin="0,0,0,6">
+                    <TextBlock Text="{Binding Name}" Classes="caption" />
+                    <ComboBox ItemsSource="{Binding SourceColumns}"
+                              SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Ошибки" FontWeight="SemiBold" FontSize="12" IsVisible="{Binding HasErrors}" />
+            <ListBox ItemsSource="{Binding Errors}" MaxHeight="120" IsVisible="{Binding HasErrors}" Background="Transparent">
+              <ListBox.ItemTemplate>
+                <DataTemplate DataType="vm:InputErrorViewModel">
+                  <TextBlock Text="{Binding Caption}" FontSize="11" TextWrapping="Wrap" Foreground="#B42318" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
         </StackPanel>
       </Border>
     </Grid>

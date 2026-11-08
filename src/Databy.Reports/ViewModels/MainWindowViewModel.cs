@@ -13,6 +13,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public TimeSpan MinimumLoadingTime { get; set; } = TimeSpan.FromMilliseconds(500);
     private readonly IReportCatalogService _catalogService;
     private readonly IReportQueryService _queryService;
+    private readonly IListReportQueryService? _listQueryService;
     private readonly IReportExportService _exportService;
     private readonly IReportAuditService _auditService;
 
@@ -20,12 +21,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IReportCatalogService catalogService,
         IReportQueryService queryService,
         IReportExportService exportService,
-        IReportAuditService? auditService = null)
+        IReportAuditService? auditService = null,
+        IListReportQueryService? listQueryService = null)
     {
         _catalogService = catalogService;
         _queryService = queryService;
         _exportService = exportService;
         _auditService = auditService ?? NullReportAuditService.Instance;
+        _listQueryService = listQueryService;
         Tabs.CollectionChanged += OnTabsChanged;
         LoadCatalog();
         ApplyDefaultPeriod();
@@ -73,7 +76,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasNoParameters => SelectedTab is not null && !HasReportParameters;
     public IEnumerable<TableColumnViewModel> SelectedTabColumns => SelectedTab?.TableColumns ?? [];
     public IEnumerable<TableRowViewModel> SelectedTabRows => SelectedTab?.TableRows ?? [];
-    public bool CanRun => SelectedTab is not null && !IsBusy;
+    public bool CanRun => SelectedTab is not null && !IsBusy && SelectedTab.ListInput is null or { IsReady: true };
+    public bool CanCancelRun => IsBusy;
     public bool CanExport => SelectedTab?.CurrentResult is not null && !IsBusy;
     public bool CanGoBack => Page > 0 && !IsBusy;
     public bool CanGoForward => Page < PageCount - 1 && !IsBusy;
@@ -86,6 +90,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public string TotalCaption => SelectedTab is null ? string.Empty : $"{SelectedTab.TotalRows:N0} строк";
 
     public Func<ReportTabViewModel, Task<string?>> ExportPathProvider { get; set; } = _ => Task.FromResult<string?>(null);
+
+    /// <summary>Фабрики сервисов буфера и выбора файла (задаются представлением).</summary>
+    public Func<IClipboardService?>? ClipboardServiceFactory { get; set; }
+
+    public Func<IFilePickerService?>? FilePickerServiceFactory { get; set; }
+
+    public ListInputViewModel? SelectedListInput => SelectedTab?.ListInput;
+    public bool HasListInput => SelectedTab?.ListInput is not null;
+    public bool HasListPreview => SelectedTab?.ListInput is { HasPreview: true } && !HasData;
 
     public void LoadCatalog()
     {
@@ -115,7 +128,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SelectedTab = existing;
             return existing;
         }
-        var created = new ReportTabViewModel(definition);
+        var listInput = definition.Input is null
+            ? null
+            : new ListInputViewModel(definition, ClipboardServiceFactory?.Invoke(), FilePickerServiceFactory?.Invoke());
+        var created = new ReportTabViewModel(definition, listInput);
+        if (listInput is not null) listInput.ReadyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasListPreview));
+            NotifyCommandsChanged();
+        };
         Tabs.Add(created);
         SelectedTab = created;
         ApplyDefaultPeriod();
@@ -184,6 +205,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowEmptyState));
         OnPropertyChanged(nameof(EmptyMessage));
         OnPropertyChanged(nameof(IsReportSelected));
+        OnPropertyChanged(nameof(HasListInput));
+        OnPropertyChanged(nameof(SelectedListInput));
+        OnPropertyChanged(nameof(HasListPreview));
         NotifyCommandsChanged();
         NotifyLayoutChanged();
     }
@@ -255,7 +279,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             var parameters = BuildParameters(tab.Definition);
             _auditService.ReportStarted(tab.Definition, parameters);
-            result = await _queryService.ExecuteAsync(tab.Definition, parameters, cts.Token);
+            if (tab.ListInput is { Stage: { } listStage } listInput && _listQueryService is not null)
+            {
+                var progress = new Progress<ListQueryProgress>(report =>
+                {
+                    tab.IsLoading = report.TotalRows > 0 && !report.IsFinal;
+                    Status = $"Обработано {report.ProcessedRows:N0} из {report.TotalRows:N0} строк ({tab.Title})";
+                });
+                result = await _listQueryService.ExecuteAsync(tab.Definition, parameters, listStage, progress, cts.Token);
+            }
+            else
+            {
+                result = await _queryService.ExecuteAsync(tab.Definition, parameters, cts.Token);
+            }
             await EnsureMinimumLoadingTimeAsync(startedAt, cts.Token);
             cts.Token.ThrowIfCancellationRequested();
             EnsureVisibleColumns(tab, result);
@@ -300,7 +336,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             throw new InvalidOperationException("Все колонки скрыты в YAML отчёта");
     }
 
-    [RelayCommand(CanExecute = nameof(IsBusy))]
+    [RelayCommand(CanExecute = nameof(CanCancelRun))]
     private void Cancel() => SelectedTab?.CancelRun();
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -358,6 +394,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         LastPageCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanRun));
         OnPropertyChanged(nameof(CanExport));
+        OnPropertyChanged(nameof(CanCancelRun));
     }
 
     private void NotifyLayoutChanged()

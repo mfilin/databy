@@ -8,12 +8,19 @@ namespace Databy.Reports.ViewModels;
 
 public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
 {
-    public ReportTabViewModel(ReportDefinition definition) => Definition = definition;
+    public ReportTabViewModel(ReportDefinition definition, ListInputViewModel? listInput = null)
+    {
+        Definition = definition;
+        ListInput = listInput;
+    }
 
     public ReportDefinition Definition { get; }
     public string Title => Definition.Title;
     public string Code => Definition.Code;
     public override string ToString() => Title;
+
+    /// <summary>Панель списка значений; null у обычных отчётов.</summary>
+    public ListInputViewModel? ListInput { get; }
 
     [ObservableProperty]
     private DataView? _rows;
@@ -120,6 +127,7 @@ public sealed partial class ReportTabViewModel : ObservableObject, IDisposable
     {
         RunCancellation?.Dispose();
         RunCancellation = null;
+        ListInput?.Dispose();
         IsLoading = false;
         CurrentResult?.Dispose();
         CurrentResult = null;

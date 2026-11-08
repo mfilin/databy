@@ -4,7 +4,10 @@ using Databy.Reports.Input;
 namespace Databy.Reports.Services;
 
 /// <summary>Прогресс выполнения отчёта по списку.</summary>
-public sealed record ListQueryProgress(long ProcessedRows, long TotalRows, int BatchNumber, int BatchCount);
+public sealed record ListQueryProgress(long ProcessedRows, long TotalRows, int BatchNumber, int BatchCount)
+{
+    public bool IsFinal => BatchCount > 0 && BatchNumber >= BatchCount;
+}
 
 /// <summary>
 /// Отчёт по списку значений: отправляет ключи пакетами и собирает итог
