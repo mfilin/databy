@@ -1,0 +1,15 @@
+code: lst.by_inn_date
+title: По ИНН и дате
+routine:
+  name: lst.by_inn_date
+  kind: function
+  timeout_sec: 60
+parameters:
+  - { name: p_asof, type: date, label: Дата, required: true, default: today }
+input:
+  row_id_parameter: p_row_id
+  result_key: row_id
+  columns:
+    - { name: p_inn, type: string, label: p_inn }
+    - { name: p_dt, type: date, label: p_dt }
+roles: [admin, user]

@@ -17,6 +17,7 @@ public static class ServiceRegistration
         services.AddSingleton<ReportCatalogLoader>();
         services.AddSingleton<IReportCatalogService, ReportCatalogService>();
         services.AddSingleton<IReportQueryService, PostgresReportQueryService>();
+        services.AddSingleton<IListReportQueryService, ListReportQueryService>();
         services.AddSingleton<ReportExportWriter>();
         services.AddSingleton<IReportExportService, ReportExportService>();
         services.AddTransient<MainWindowViewModel>();

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net8.0</TargetFramework><IsPackable>false</IsPackable><IsTestProject>true</IsTestProject><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
@@ -11,6 +11,7 @@
   <ItemGroup>
     <None Include="..\db\init.sql" Link="db\init.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\db\pq_functions.sql" Link="db\pq_functions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\db\list_functions.sql" Link="db\list_functions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\db\demo.sql" Link="db\demo.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\fixtures\catalog_t2\**\*.yml" Link="fixtures\catalog_t2\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

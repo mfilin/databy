@@ -1,0 +1,12 @@
+code: lst.unsorted
+title: Неотсортированный
+routine:
+  name: lst.unsorted
+  kind: function
+  timeout_sec: 60
+input:
+  row_id_parameter: p_row_id
+  result_key: row_id
+  columns:
+    - { name: p_inn, type: string, label: p_inn }
+roles: [admin, user]

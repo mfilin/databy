@@ -9,7 +9,7 @@ namespace Tests.Integration;
 /// <summary>Один контейнер PostgreSQL на весь T2-набор.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
-    private static readonly string[] CleanupScripts = ["init.sql", "pq_functions.sql", "demo.sql"];
+    private static readonly string[] CleanupScripts = ["init.sql", "pq_functions.sql", "list_functions.sql", "demo.sql"];
 
     public PostgreSqlContainer Container { get; } = new PostgreSqlBuilder()
         .WithImage("postgres:18")

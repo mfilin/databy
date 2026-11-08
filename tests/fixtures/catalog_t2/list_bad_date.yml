@@ -1,0 +1,13 @@
+code: lst.bad_date
+title: Ошибочные даты
+routine:
+  name: lst.bad_date
+  kind: function
+  timeout_sec: 60
+input:
+  row_id_parameter: p_row_id
+  result_key: row_id
+  columns:
+    - { name: p_inn, type: string, label: ИНН }
+    - { name: p_dt, type: date, label: Дата }
+roles: [admin, user]
