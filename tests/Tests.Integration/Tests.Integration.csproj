@@ -5,7 +5,13 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets><PrivateAssets>all</PrivateAssets></PackageReference>
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.1.0" />
+    <PackageReference Include="ExcelDataReader" Version="3.7.0" />
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\..\src\Databy.Reports\Databy.Reports.csproj" /></ItemGroup>
-  <ItemGroup><None Include="..\db\init.sql" Link="db\init.sql" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup>
+    <None Include="..\db\init.sql" Link="db\init.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\db\pq_functions.sql" Link="db\pq_functions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\db\demo.sql" Link="db\demo.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\fixtures\catalog_t2\**\*.yml" Link="fixtures\catalog_t2\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

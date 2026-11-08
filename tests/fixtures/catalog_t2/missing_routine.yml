@@ -1,0 +1,8 @@
+code: pq.missing
+title: Нет функции
+routine:
+  name: pq.no_such_function
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

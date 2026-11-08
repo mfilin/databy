@@ -1,0 +1,8 @@
+code: pq.empty
+title: Пустой результат
+routine:
+  name: pq.empty_result
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

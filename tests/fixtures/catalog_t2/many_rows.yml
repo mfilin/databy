@@ -1,0 +1,12 @@
+code: pq.many
+title: Много строк
+routine:
+  name: pq.many_rows
+  kind: function
+  timeout_sec: 30
+parameters:
+  - name: p_count
+    type: int
+    label: Количество
+    required: true
+roles: [admin, user]

@@ -1,0 +1,8 @@
+code: pq.failing
+title: Падающий
+routine:
+  name: pq.failing_report
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

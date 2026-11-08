@@ -1,0 +1,12 @@
+code: pq.temp
+title: Временная таблица
+routine:
+  name: pq.temp_table_report
+  kind: function
+  timeout_sec: 30
+parameters:
+  - name: p_seed
+    type: int
+    label: Начало
+    required: true
+roles: [admin, user]

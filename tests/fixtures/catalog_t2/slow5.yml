@@ -1,0 +1,8 @@
+code: pq.slow5
+title: Медленный 5с
+routine:
+  name: pq.slow_report_5
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

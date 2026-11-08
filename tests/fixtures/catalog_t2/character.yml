@@ -1,0 +1,8 @@
+code: pq.character
+title: Character padding
+routine:
+  name: pq.character_padding
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

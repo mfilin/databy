@@ -1,0 +1,12 @@
+code: pq.wrong_param
+title: Неверное имя параметра
+routine:
+  name: pq.different_argument_name
+  kind: function
+  timeout_sec: 30
+parameters:
+  - name: p_expected
+    type: int
+    label: Целое
+    required: true
+roles: [admin, user]

@@ -1,0 +1,32 @@
+code: pq.params
+title: Эхо параметров
+routine:
+  name: pq.echo_params
+  kind: function
+  timeout_sec: 30
+parameters:
+  - name: p_date
+    type: date
+    label: Дата
+    required: true
+  - name: p_int
+    type: int
+    label: Целое
+    required: true
+  - name: p_decimal
+    type: decimal
+    label: Дробное
+    required: true
+  - name: p_text
+    type: string
+    label: Текст
+    required: true
+  - name: p_bool
+    type: bool
+    label: Флаг
+    required: true
+  - name: p_optional
+    type: string
+    label: Необязательный
+    required: false
+roles: [admin, user]

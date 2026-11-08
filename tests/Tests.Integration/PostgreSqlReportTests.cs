@@ -1,30 +1,13 @@
 using Npgsql;
 using NpgsqlTypes;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Tests.Integration;
 
 [Trait("Category", "T2")]
-public sealed class PostgreSqlReportTests : IAsyncLifetime
+[Collection(PostgresCollection.Name)]
+public sealed class PostgreSqlReportTests(PostgresFixture fixture)
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:18")
-        .WithDatabase("reports_test")
-        .WithUsername("test_user")
-        .WithPassword("test_password")
-        .Build();
-
-    public async Task InitializeAsync()
-    {
-        await _postgres.StartAsync();
-        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
-        await connection.OpenAsync();
-        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "init.sql"));
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
-    }
-
     [Fact]
     public async Task Db01_FunctionReturnsDynamicColumnsAndTypedValues()
     {
@@ -113,9 +96,7 @@ public sealed class PostgreSqlReportTests : IAsyncLifetime
 
     private async Task<NpgsqlConnection> Open()
     {
-        var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync(); return connection;
     }
-
-    public async Task DisposeAsync() => await _postgres.DisposeAsync();
 }

@@ -1,0 +1,8 @@
+code: pq.cyrillic
+title: Кириллические колонки
+routine:
+  name: pq.cyrillic_columns
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]

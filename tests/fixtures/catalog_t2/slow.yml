@@ -1,0 +1,8 @@
+code: pq.slow
+title: Долгий запрос
+routine:
+  name: pq.slow_report
+  kind: function
+  timeout_sec: 30
+parameters: []
+roles: [admin, user]
