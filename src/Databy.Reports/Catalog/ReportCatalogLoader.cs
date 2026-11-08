@@ -15,6 +15,7 @@ public sealed class ReportCatalogLoader
     private static readonly HashSet<string> UnsupportedTypes = new(StringComparer.OrdinalIgnoreCase) { "daterange", "lookup" };
     private static readonly HashSet<string> RoutineKinds = new(StringComparer.OrdinalIgnoreCase) { "function" };
     private static readonly HashSet<string> Roles = new(StringComparer.OrdinalIgnoreCase) { "admin", "user" };
+    private static readonly HashSet<string> InputColumnTypes = new(StringComparer.OrdinalIgnoreCase) { "string", "int", "decimal", "date", "bool" };
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance).IgnoreUnmatchedProperties().Build();
 
@@ -75,8 +76,47 @@ public sealed class ReportCatalogLoader
         var resultIssue = ValidateResult(report.Result);
         if (resultIssue is not null) return resultIssue;
 
+        var inputIssue = ValidateInput(report);
+        if (inputIssue is not null) return inputIssue;
+
         var invalidRole = report.Roles.FirstOrDefault(role => !Roles.Contains(role));
         return invalidRole is null ? null : $"Недопустимая роль '{invalidRole}'";
+    }
+
+    private static string? ValidateInput(ReportDefinition report)
+    {
+        var input = report.Input;
+        if (input is null) return null;
+
+        if (input.Columns.Count == 0) return "В input.columns должна быть хотя бы одна колонка";
+
+        if (input.MaxRows < 1 || input.MaxRows > InputDefinition.MaximumRows)
+            return $"input.max_rows должен быть в диапазоне 1..{InputDefinition.MaximumRows} (сейчас {input.MaxRows})";
+        if (input.BatchSize < 1 || input.BatchSize > input.MaxRows)
+            return $"input.batch_size должен быть в диапазоне 1..max_rows (сейчас {input.BatchSize}, max_rows {input.MaxRows})";
+        if (string.IsNullOrWhiteSpace(input.ResultKey)) return "Не задан input.result_key";
+        if (string.Equals(input.StatusColumn, input.ResultKey, StringComparison.Ordinal))
+            return $"input.status_column не должен совпадать с input.result_key ('{input.ResultKey}')";
+
+        if (!Regex.IsMatch(input.RowIdParameter, @"^[a-zA-Z_][a-zA-Z0-9_]*$"))
+            return $"Недопустимое имя input.row_id_parameter '{input.RowIdParameter}'";
+
+        var parameterNames = new HashSet<string>(report.Parameters.Select(parameter => parameter.Name), StringComparer.OrdinalIgnoreCase);
+        var columnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in input.Columns)
+        {
+            if (!Regex.IsMatch(column.Name, @"^[a-zA-Z_][a-zA-Z0-9_]*$"))
+                return $"Недопустимое имя колонки input '{column.Name}'";
+            if (columnNames.Contains(column.Name))
+                return $"Повторяется имя колонки input '{column.Name}'";
+            if (parameterNames.Contains(column.Name))
+                return $"Колонка input '{column.Name}' совпадает с именем параметра отчёта";
+            if (!InputColumnTypes.Contains(column.Type))
+                return $"Неизвестный тип колонки input '{column.Type}' (допустимо: string, int, decimal, date, bool)";
+            columnNames.Add(column.Name);
+        }
+
+        return null;
     }
 
     private static string? ValidateResult(ResultDefinition? result)
@@ -110,6 +150,7 @@ public sealed class ReportDefinition
     public RoutineDefinition Routine { get; set; } = new();
     public List<ParameterDefinition> Parameters { get; set; } = [];
     public ResultDefinition? Result { get; set; }
+    public InputDefinition? Input { get; set; }
     public List<string> Roles { get; set; } = [];
     public override string ToString() => Title;
 }
