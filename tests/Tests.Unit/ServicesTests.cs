@@ -253,6 +253,8 @@ public sealed class MainWindowViewModelTests
             Assert.True(succeeded.DurationMs >= 0);
             Assert.Empty(audit.Failed);
             Assert.Empty(audit.Canceled);
+            Assert.True(viewModel.IsStatusSuccess);
+            Assert.False(viewModel.IsStatusError);
         }
         finally { viewModel.Dispose(); }
     }
@@ -279,6 +281,8 @@ public sealed class MainWindowViewModelTests
             Assert.Contains("boom", viewModel.Status);
             Assert.Empty(audit.Succeeded);
             Assert.Empty(audit.Canceled);
+            Assert.True(viewModel.IsStatusError);
+            Assert.False(viewModel.IsStatusSuccess);
         }
         finally { viewModel.Dispose(); }
     }
@@ -306,6 +310,8 @@ public sealed class MainWindowViewModelTests
             Assert.Equal("sales.monthly", canceled.Report.Code);
             Assert.Empty(audit.Succeeded);
             Assert.Empty(audit.Failed);
+            Assert.False(viewModel.IsStatusSuccess);
+            Assert.False(viewModel.IsStatusError);
         }
         finally { viewModel.Dispose(); }
     }

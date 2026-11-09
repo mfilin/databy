@@ -93,6 +93,15 @@
       <Setter Property="Background" Value="#FDE8E8" />
       <Setter Property="TextElement.Foreground" Value="#B42318" />
     </Style>
+    <Style Selector="Border.statusBar">
+      <Setter Property="Background" Value="{StaticResource Surface}" />
+    </Style>
+    <Style Selector="Border.statusBar.success">
+      <Setter Property="Background" Value="#E8F5E9" />
+    </Style>
+    <Style Selector="Border.statusBar.error">
+      <Setter Property="Background" Value="#FFF8E1" />
+    </Style>
   </Window.Styles>
 
   <Grid RowDefinitions="64,*,34">
@@ -386,7 +395,10 @@
     </Grid>
 
     <!-- STATUS BAR -->
-    <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0">
+    <Border x:Name="statusBar" Grid.Row="2" Classes="statusBar"
+            Classes.success="{Binding IsStatusSuccess}"
+            Classes.error="{Binding IsStatusError}"
+            BorderBrush="{StaticResource BorderColor}" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="*,Auto" Margin="16,0">
         <TextBlock Text="{Binding Status}" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource TextMuted}" />
         <TextBlock Grid.Column="1" Text="{Binding CatalogVersion, StringFormat='Каталог v{0}'}"

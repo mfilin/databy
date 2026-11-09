@@ -57,6 +57,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private string? _status = "Выберите отчёт в каталоге и нажмите «Обновить»";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStatusSuccess), nameof(IsStatusError))]
+    private StatusTone _statusTone = StatusTone.Neutral;
+
+    [ObservableProperty]
     private string _catalogVersion = "не указана";
 
     [ObservableProperty]
@@ -69,6 +73,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private int _page;
 
     public bool IsReportSelected => SelectedTab is not null;
+    public bool IsStatusSuccess => StatusTone == StatusTone.Success;
+    public bool IsStatusError => StatusTone == StatusTone.Error;
     public string SelectedTabTitle => SelectedTab?.Title ?? "Отчёт не выбран";
     public bool HasReportParameters => SelectedTab?.Definition.Parameters.Count > 0;
     public bool HasDateParameters => SelectedTab?.Definition.Parameters
@@ -109,14 +115,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             CatalogVersion = catalog.Version;
             CatalogError = catalog.Errors.Count == 0 ? null : $"Файлов с ошибками: {catalog.Errors.Count}";
             BuildTree(catalog);
-            Status = CatalogError is null
+            SetStatus(CatalogError is null
                 ? $"Каталог v{CatalogVersion} • {catalog.Reports.Count} отчёт(а)"
-                : $"Каталог v{CatalogVersion} • {catalog.Reports.Count} отчёт(а) • ошибок: {catalog.Errors.Count}";
+                : $"Каталог v{CatalogVersion} • {catalog.Reports.Count} отчёт(а) • ошибок: {catalog.Errors.Count}",
+                CatalogError is null ? StatusTone.Neutral : StatusTone.Error);
         }
         catch (Exception ex)
         {
             CatalogError = ex.Message;
-            Status = "Не удалось загрузить каталог: " + ex.Message;
+            SetStatus("Не удалось загрузить каталог: " + ex.Message, StatusTone.Error);
         }
     }
 
@@ -222,6 +229,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private static long ElapsedMs(DateTimeOffset startedAt) =>
         (long)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds;
 
+    private void SetStatus(string message, StatusTone tone = StatusTone.Neutral)
+    {
+        Status = message;
+        StatusTone = tone;
+    }
+
     private async Task EnsureMinimumLoadingTimeAsync(DateTimeOffset startedAt, CancellationToken cancellationToken)
     {
         var remaining = MinimumLoadingTime - (DateTimeOffset.UtcNow - startedAt);
@@ -271,7 +284,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         tab.RunCancellation = cts;
         tab.IsLoading = true;
         IsBusy = true;
-        Status = $"Выполняется запрос… ({tab.Title})";
+        SetStatus($"Выполняется запрос… ({tab.Title})");
         var startedAt = DateTimeOffset.UtcNow;
         ReportQueryResult? result = null;
         var applied = false;
@@ -284,7 +297,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 var progress = new Progress<ListQueryProgress>(report =>
                 {
                     tab.IsLoading = report.TotalRows > 0 && !report.IsFinal;
-                    Status = $"Обработано {report.ProcessedRows:N0} из {report.TotalRows:N0} строк ({tab.Title})";
+                    SetStatus($"Обработано {report.ProcessedRows:N0} из {report.TotalRows:N0} строк ({tab.Title})");
                 });
                 result = await _listQueryService.ExecuteAsync(tab.Definition, parameters, listStage, progress, cts.Token);
             }
@@ -298,18 +311,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             tab.Apply(result);
             applied = true;
             if (ReferenceEquals(SelectedTab, tab)) Page = 0;
-            Status = $"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
-                     (tab.TotalRows > tab.PreviewRows ? " (превью ограничено)" : string.Empty);
+            SetStatus($"Показано {tab.PreviewRows} из {tab.TotalRows:N0} строк" +
+                      (tab.TotalRows > tab.PreviewRows ? " (превью ограничено)" : string.Empty),
+                      StatusTone.Success);
             _auditService.ReportSucceeded(tab.Definition, tab.TotalRows, ElapsedMs(startedAt));
         }
         catch (OperationCanceledException)
         {
-            Status = $"Запуск отменён: {tab.Title}";
+            SetStatus($"Запуск отменён: {tab.Title}");
             _auditService.ReportCanceled(tab.Definition, ElapsedMs(startedAt));
         }
         catch (Exception ex)
         {
-            Status = "Ошибка отчёта: " + ex.Message;
+            SetStatus("Ошибка отчёта: " + ex.Message, StatusTone.Error);
             _auditService.ReportFailed(tab.Definition, ex, ElapsedMs(startedAt));
             Serilog.Log.Error(ex, "Report {ReportCode} failed", tab.Code);
         }
@@ -348,13 +362,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         try
         {
             var saved = _exportService.Save(result, tab.Definition, path);
-            Status = saved.ExcelLimitExceeded
+            SetStatus(saved.ExcelLimitExceeded
                 ? $"Превышен лимит Excel — сохранён полный CSV: {Path.GetFileName(saved.Path)}"
-                : "Файл сохранён: " + Path.GetFileName(saved.Path);
+                : "Файл сохранён: " + Path.GetFileName(saved.Path));
         }
         catch (Exception ex)
         {
-            Status = "Ошибка экспорта: " + ex.Message;
+            SetStatus("Ошибка экспорта: " + ex.Message, StatusTone.Error);
             Serilog.Log.Error(ex, "Export failed");
         }
     }

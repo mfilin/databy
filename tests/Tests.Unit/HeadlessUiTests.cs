@@ -1,6 +1,7 @@
 using System.Data;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Databy.Reports.Catalog;
 using Databy.Reports.Export;
@@ -293,7 +294,47 @@ public sealed class HeadlessUiTests
         finally { window.Close(); viewModel.Dispose(); }
     }
 
-    internal static (MainWindow Window, MainWindowViewModel ViewModel) CreateWindow(string? amountFormat = null, int? columnCount = null)
+    [AvaloniaFact]
+    public async Task Ui_StatusBarTurnsGreenOnSuccess()
+    {
+        var (window, viewModel) = CreateWindow(amountFormat: "#,##0.00");
+        window.Show();
+        try
+        {
+            viewModel.OpenReport(MainWindowViewModelTests.FirstReport(viewModel));
+            await viewModel.RunCommand.ExecuteAsync(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.True(viewModel.IsStatusSuccess);
+            var bar = window.FindControl<Border>("statusBar");
+            Assert.NotNull(bar);
+            var brush = Assert.IsAssignableFrom<ISolidColorBrush>(bar!.Background);
+            Assert.Equal(Color.Parse("#E8F5E9"), brush.Color);
+        }
+        finally { window.Close(); viewModel.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Ui_StatusBarTurnsYellowOnError()
+    {
+        var (window, viewModel) = CreateWindow(amountFormat: "#,##0.00", query: new ThrowingQuery());
+        window.Show();
+        try
+        {
+            viewModel.OpenReport(MainWindowViewModelTests.FirstReport(viewModel));
+            await viewModel.RunCommand.ExecuteAsync(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.True(viewModel.IsStatusError);
+            var bar = window.FindControl<Border>("statusBar");
+            Assert.NotNull(bar);
+            var brush = Assert.IsAssignableFrom<ISolidColorBrush>(bar!.Background);
+            Assert.Equal(Color.Parse("#FFF8E1"), brush.Color);
+        }
+        finally { window.Close(); viewModel.Dispose(); }
+    }
+
+    internal static (MainWindow Window, MainWindowViewModel ViewModel) CreateWindow(string? amountFormat = null, int? columnCount = null, IReportQueryService? query = null)
     {
         var columns = new Dictionary<string, ReportColumnDefinition>(StringComparer.OrdinalIgnoreCase);
         if (amountFormat is not null)
@@ -309,7 +350,7 @@ public sealed class HeadlessUiTests
             Parameters = [new ParameterDefinition { Name = "p_from", Type = "date" }, new ParameterDefinition { Name = "p_to", Type = "date" }],
             Result = new ResultDefinition { Columns = columns }
         };
-        var viewModel = new MainWindowViewModel(new StubCatalog(definition), new StubQuery(), new StubExport())
+        var viewModel = new MainWindowViewModel(new StubCatalog(definition), query ?? new StubQuery(), new StubExport())
         {
             MinimumLoadingTime = TimeSpan.Zero
         };
@@ -323,8 +364,19 @@ public sealed class HeadlessUiTests
 
     private sealed class StubQuery : IReportQueryService
     {
+        public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
+        {
+            var table = new DataTable();
+            table.Columns.Add("Amount", typeof(decimal));
+            table.Rows.Add(1m);
+            return Task.FromResult(new ReportQueryResult(new ReportPreview(table, 1), new TemporaryCsvStage(), 1));
+        }
+    }
+
+    private sealed class ThrowingQuery : IReportQueryService
+    {
         public Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ReportQueryResult(new ReportPreview(new DataTable(), 0), new TemporaryCsvStage(), 0));
+            throw new InvalidOperationException("boom");
     }
 
     private sealed class StubExport : IReportExportService
