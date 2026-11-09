@@ -13,6 +13,7 @@
     <None Include="..\db\pq_functions.sql" Link="db\pq_functions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\db\list_functions.sql" Link="db\list_functions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\db\demo.sql" Link="db\demo.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\catalog\sales\sales_by_cities.yml" Link="example-catalog\sales\sales_by_cities.yml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\fixtures\catalog_t2\**\*.yml" Link="fixtures\catalog_t2\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -104,11 +104,11 @@ public sealed class ListReportQueryService : IListReportQueryService
 
                     var buffer = new StringWriter(CultureInfo.InvariantCulture);
                     merger.Write(buffer, new BatchResult(rows.ToArray(), database.Rows));
-                    foreach (var line in buffer.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+                    foreach (var record in SplitRecords(buffer.ToString()))
                     {
-                        writer.WriteLine(line);
+                        writer.WriteLine(record);
                         rowsWritten++;
-                        if (table.Rows.Count < PreviewLimit) AppendPreviewRow(line);
+                        if (table.Rows.Count < PreviewLimit) AppendPreviewRow(record);
                     }
 
                     processed += rows.Count;
@@ -285,6 +285,24 @@ public sealed class ListReportQueryService : IListReportQueryService
         long count = 0;
         foreach (var _ in input.ReadRows()) count++;
         return count;
+    }
+
+    /// <summary>Делит CSV-поток на записи с учётом кавычек и переводов строк внутри значений.</summary>
+    private static IEnumerable<string> SplitRecords(string text)
+    {
+        var start = 0;
+        var inQuotes = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == '"') inQuotes = !inQuotes;
+            if (inQuotes || (ch != '\r' && ch != '\n')) continue;
+
+            if (i > start) yield return text[start..i];
+            if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
+            start = i + 1;
+        }
+        if (start < text.Length) yield return text[start..];
     }
 
     private static string[] SplitRecord(string line)

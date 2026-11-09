@@ -1,0 +1,36 @@
+code: sales.by_cities
+title: Продажи по списку городов
+routine:
+  name: reports.fn_sales_by_cities
+  kind: function
+  timeout_sec: 60
+parameters:
+  - name: p_from
+    type: date
+    label: Дата с
+    required: true
+    default: month_start
+  - name: p_to
+    type: date
+    label: Дата по
+    required: true
+    default: today
+input:
+  label: Список городов
+  max_rows: 1000000
+  batch_size: 100000
+  row_id_parameter: p_row_id
+  result_key: row_id
+  status_column: "Статус поиска"
+  columns:
+    - { name: p_city, type: string, label: Город, required: true }
+result:
+  sheet: Продажи по городам
+  columns:
+    region: { title: Город }
+    sold_at: { title: Дата, format: "dd.MM.yyyy" }
+    product: { title: Товар }
+    quantity: { title: Количество, format: "#,##0" }
+    total: { title: Сумма, format: "#,##0.00" }
+    status: { title: "Статус из БД" }
+roles: [admin, user]

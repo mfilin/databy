@@ -82,6 +82,10 @@ public sealed class ListInputPanelTests
         Assert.Contains("p_asof", listService.Parameters!.Keys);
         Assert.NotNull(listService.Input);
         Assert.True(viewModel.HasData);
+        Assert.False(viewModel.ShowEmptyState);
+        // После успешного запуска показывается таблица результата, а не предпросмотр списка.
+        Assert.False(viewModel.HasListPreview);
+        Assert.Equal(1, viewModel.SelectedTab!.TableRows.Count - 1);
     }
 
     [Fact]

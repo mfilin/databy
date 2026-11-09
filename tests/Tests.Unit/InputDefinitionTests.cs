@@ -177,7 +177,12 @@ public sealed class InputDefinitionTests
     {
         var catalog = new ReportCatalogLoader().Load(RepositoryCatalog());
         Assert.Empty(catalog.Errors);
-        Assert.DoesNotContain(catalog.Reports, report => report.Input is not null);
+
+        var listReport = Assert.Single(catalog.Reports, report => report.Input is not null);
+        Assert.Equal("sales.by_cities", listReport.Code);
+        Assert.Equal(["p_city"], listReport.Input!.Columns.Select(column => column.Name));
+        Assert.Equal("p_row_id", listReport.Input.RowIdParameter);
+        Assert.Equal("row_id", listReport.Input.ResultKey);
     }
 
     private static string Report(string input, string kind = "function") => $"""

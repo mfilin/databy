@@ -109,3 +109,16 @@ LANGUAGE sql STABLE AS $$
  LEFT JOIN lst.orgs o ON o.inn = r.inn
  ORDER BY r.rid
 $$;
+
+-- Пример из catalog/sales/sales_by_cities.yml: продажи по списку городов.
+CREATE OR REPLACE FUNCTION reports.fn_sales_by_cities(p_city text[], p_row_id int[], p_from date, p_to date)
+RETURNS TABLE(region text, sold_at date, product text, quantity integer, total numeric, status text, row_id int)
+LANGUAGE sql STABLE AS $$
+ SELECT r.city, s.sold_at, s.product, s.quantity, (s.quantity * s.unit_price)::numeric(14,2),
+        CASE WHEN s.id IS NULL THEN 'РќРµ РЅР°Р№РґРµРЅРѕ' ELSE 'РќР°Р№РґРµРЅРѕ' END,
+        r.rid
+ FROM unnest(p_city, p_row_id) AS r(city, rid)
+ LEFT JOIN reports.demo_sales s
+   ON s.region = r.city AND s.sold_at BETWEEN p_from AND p_to
+ ORDER BY r.rid, s.sold_at, s.product
+$$;

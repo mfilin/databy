@@ -408,6 +408,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanGoBack));
         OnPropertyChanged(nameof(CanGoForward));
         OnPropertyChanged(nameof(IsReportSelected));
+        OnPropertyChanged(nameof(HasListPreview));
+        OnPropertyChanged(nameof(SelectedTabColumns));
+        OnPropertyChanged(nameof(SelectedTabRows));
         NotifyCommandsChanged();
     }
 
