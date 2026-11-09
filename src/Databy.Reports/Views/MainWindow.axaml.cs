@@ -1,5 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Databy.Reports.Catalog;
 using Databy.Reports.Services;
 using Databy.Reports.ViewModels;
@@ -57,6 +61,59 @@ public sealed partial class MainWindow : Window
         if (sender is not Control { DataContext: ReportTabViewModel tab }) return;
         e.Handled = true;
         ViewModel?.CloseTab(tab);
+    }
+
+    private void OnTabsScrollLeft(object? sender, RoutedEventArgs e) => ScrollTabs(sender, -1);
+
+    private void OnTabsScrollRight(object? sender, RoutedEventArgs e) => ScrollTabs(sender, 1);
+
+    private static void ScrollTabs(object? sender, int direction)
+    {
+        if (sender is not Control control) return;
+        var scroll = control.FindAncestorOfType<TabControl>()?
+            .GetVisualDescendants()
+            .OfType<ScrollViewer>()
+            .FirstOrDefault(viewer => viewer.Name == "PART_TabScroll");
+        if (scroll is null) return;
+
+        var step = Math.Max(48, scroll.Viewport.Width * 0.6);
+        var max = Math.Max(0, scroll.Extent.Width - scroll.Viewport.Width);
+        var x = Math.Clamp(scroll.Offset.X + direction * step, 0, max);
+        scroll.Offset = new Vector(x, 0);
+    }
+
+    private void OnTabScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (sender is not ScrollViewer scroll || scroll.Parent is not Grid grid) return;
+
+        var left = grid.Children.OfType<Button>().FirstOrDefault(button => button.Name == "PART_TabScrollLeft");
+        var right = grid.Children.OfType<Button>().FirstOrDefault(button => button.Name == "PART_TabScrollRight");
+        var max = Math.Max(0, scroll.Extent.Width - scroll.Viewport.Width);
+        var hasOverflow = max > 0.5;
+
+        if (left is not null)
+        {
+            left.IsVisible = hasOverflow;
+            left.IsEnabled = scroll.Offset.X > 0.5;
+        }
+        if (right is not null)
+        {
+            right.IsVisible = hasOverflow;
+            right.IsEnabled = scroll.Offset.X < max - 0.5;
+        }
+    }
+
+    private void OnReportTabSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
+        Dispatcher.UIThread.Post(ScrollSelectedTabIntoView, DispatcherPriority.Loaded);
+
+    private void ScrollSelectedTabIntoView()
+    {
+        if (ViewModel?.SelectedTab is not { } selected) return;
+        var tabItem = this.FindControl<TabControl>("reportTabs")?
+            .GetVisualDescendants()
+            .OfType<TabItem>()
+            .FirstOrDefault(item => ReferenceEquals(item.DataContext, selected));
+        tabItem?.BringIntoView();
     }
 
     private void OnCloseTabMenuClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>

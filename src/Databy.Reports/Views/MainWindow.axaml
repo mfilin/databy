@@ -7,7 +7,9 @@
         Title="Отчётность"
         Width="1360" Height="820" MinWidth="1024" MinHeight="620"
         Background="#F4F7FB"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://Databy.Reports/Assets/databy.ico"
+        >
   <Window.Resources>
     <SolidColorBrush x:Key="Surface">#FFFFFF</SolidColorBrush>
     <SolidColorBrush x:Key="SurfaceMuted">#F7F9FC</SolidColorBrush>
@@ -93,6 +95,56 @@
       <Setter Property="Background" Value="#FDE8E8" />
       <Setter Property="TextElement.Foreground" Value="#B42318" />
     </Style>
+    <Style Selector="Button.tabScroll">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tabScroll:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource PrimarySoft}" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Button.tabScroll:disabled">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <!-- Вкладки отчётов: одна горизонтальная строка с прокруткой стрелками. -->
+    <Style Selector="TabControl.reportTabs">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid RowDefinitions="Auto,*">
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Background="{TemplateBinding Background}">
+              <Button Grid.Column="0" Name="PART_TabScrollLeft" Classes="tabScroll" Content="◀" IsVisible="False"
+                      AutomationProperties.AutomationId="TabScrollLeft"
+                      AutomationProperties.Name="Прокрутить вкладки влево"
+                      Click="OnTabsScrollLeft" ToolTip.Tip="Прокрутить вкладки влево" />
+              <ScrollViewer Grid.Column="1" Name="PART_TabScroll"
+                            HorizontalScrollBarVisibility="Hidden"
+                            VerticalScrollBarVisibility="Disabled"
+                            IsScrollChainingEnabled="False"
+                            ScrollChanged="OnTabScrollChanged">
+                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+              <Button Grid.Column="2" Name="PART_TabScrollRight" Classes="tabScroll" Content="▶" IsVisible="False"
+                      AutomationProperties.AutomationId="TabScrollRight"
+                      AutomationProperties.Name="Прокрутить вкладки вправо"
+                      Click="OnTabsScrollRight" ToolTip.Tip="Прокрутить вкладки вправо" />
+            </Grid>
+            <ContentPresenter Grid.Row="1" Name="PART_SelectedContentHost"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding SelectedContent}"
+                              ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+    </Style>
     <Style Selector="Border.statusBar">
       <Setter Property="Background" Value="{StaticResource Surface}" />
     </Style>
@@ -109,9 +161,9 @@
     <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderColor}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,0">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Border Width="34" Height="34" CornerRadius="8" Background="{StaticResource Primary}">
-            <TextBlock Text="D" Foreground="White" FontWeight="Bold" FontSize="18"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <Border Width="34" Height="34" CornerRadius="8" ClipToBounds="True" Background="{StaticResource Primary}">
+            <Image Source="avares://Databy.Reports/Assets/databy-256.png" Stretch="UniformToFill"
+                   Width="34" Height="34" />
           </Border>
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="Databy Reports" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
@@ -179,8 +231,15 @@
               BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
               IsVisible="{Binding IsReportSelected}">
         <Grid RowDefinitions="Auto,Auto,*,Auto">
-          <TabControl Grid.Row="0" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+          <TabControl x:Name="reportTabs" Grid.Row="0" Classes="reportTabs"
+                      ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                      SelectionChanged="OnReportTabSelectionChanged"
                       Background="Transparent" Padding="0">
+            <TabControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
             <TabControl.ItemTemplate>
               <DataTemplate DataType="vm:ReportTabViewModel">
                 <StackPanel Orientation="Horizontal" Spacing="6" DoubleTapped="OnTabDoubleTapped">

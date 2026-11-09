@@ -295,6 +295,79 @@ public sealed class HeadlessUiTests
     }
 
     [AvaloniaFact]
+    public void Ui_TabsStayInSingleScrollableRow()
+    {
+        var (window, viewModel) = CreateWindow();
+        window.Show();
+        try
+        {
+            // Одна короткая вкладка помещается — стрелки не нужны.
+            viewModel.OpenReport(new ReportDefinition
+            {
+                Code = "tab.single",
+                Title = "Отчёт",
+                Routine = new RoutineDefinition { Name = "reports.fn_test" },
+                Parameters = [],
+                Result = new ResultDefinition()
+            });
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var tabs = window.FindControl<TabControl>("reportTabs");
+            Assert.NotNull(tabs);
+            var scroll = tabs!.GetVisualDescendants().OfType<ScrollViewer>()
+                .First(viewer => viewer.Name == "PART_TabScroll");
+            var left = tabs.GetVisualDescendants().OfType<Button>()
+                .First(button => button.Name == "PART_TabScrollLeft");
+            var right = tabs.GetVisualDescendants().OfType<Button>()
+                .First(button => button.Name == "PART_TabScrollRight");
+
+            Assert.False(scroll.Extent.Width > scroll.Viewport.Width);
+            Assert.False(left.IsVisible);
+            Assert.False(right.IsVisible);
+
+            for (var i = 0; i < 7; i++)
+            {
+                viewModel.OpenReport(new ReportDefinition
+                {
+                    Code = $"tab.{i}",
+                    Title = $"Отчёт с длинным названием {i}",
+                    Routine = new RoutineDefinition { Name = "reports.fn_test" },
+                    Parameters = [],
+                    Result = new ResultDefinition()
+                });
+            }
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var presenter = tabs.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ItemsPresenter>().First();
+            var panel = Assert.IsType<StackPanel>(presenter.Panel);
+            Assert.Equal(Avalonia.Layout.Orientation.Horizontal, panel.Orientation);
+
+            var items = tabs.GetVisualDescendants().OfType<TabItem>().ToList();
+            Assert.Equal(8, items.Count);
+            Assert.Single(items.Select(item => item.Bounds.Y).Distinct());
+
+            Assert.True(scroll.Extent.Width > scroll.Viewport.Width);
+            Assert.True(left.IsVisible);
+            Assert.True(right.IsVisible);
+
+            // Новые вкладки прокручивают полосу к выбранному отчёту.
+            Assert.True(scroll.Offset.X > 0);
+
+            scroll.Offset = new Avalonia.Vector(0, 0);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(left.IsEnabled);
+            Assert.True(right.IsEnabled);
+
+            right.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.True(scroll.Offset.X > 0);
+            Assert.True(left.IsEnabled);
+        }
+        finally { window.Close(); viewModel.Dispose(); }
+    }
+
+    [AvaloniaFact]
     public async Task Ui_StatusBarTurnsGreenOnSuccess()
     {
         var (window, viewModel) = CreateWindow(amountFormat: "#,##0.00");
