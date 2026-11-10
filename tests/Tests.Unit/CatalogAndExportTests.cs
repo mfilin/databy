@@ -7,6 +7,7 @@ using ExcelDataReader;
 
 namespace Tests.Unit;
 
+[Collection("temp-stage")]
 [Trait("Category", "T1")]
 public sealed class CatalogTests
 {

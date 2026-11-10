@@ -1,0 +1,26 @@
+code: ЕРСМСП.check_list_inn
+title: Проверка ИНН на дату в ЕРСМСП
+routine:
+  name: programm_reports.mf_checklist_inn
+  kind: function
+  timeout_sec: 600
+input:
+  label: Список ИНН и дат
+  max_rows: 1000000
+  batch_size: 100000
+  row_id_parameter: p_row_id
+  result_key: row_id
+  status_column: "Статус поиска"
+  columns:
+    - { name: p_inn, type: string, label: ИНН, required: true }
+    - { name: p_dt, type: date, label: Дата, required: true }
+result:
+  sheet: Проверка ИНН
+  columns:
+    "ИНН": { title: ИНН }
+    "Дата": { title: Дата, format: "dd.MM.yyyy" }
+    "-В ЕРСМСП на дату": { title: "В ЕРСМСП на дату" }
+    "-Категория": { title: Категория }
+    "-Регион": { title: Регион }
+    row_id: { hidden: true }
+roles: [admin, user]

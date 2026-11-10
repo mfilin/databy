@@ -286,11 +286,19 @@ public sealed partial class ColumnMappingViewModel : ObservableObject
     public ColumnMappingViewModel(InputColumnDefinition column)
     {
         Name = column.Name;
+        Label = string.IsNullOrWhiteSpace(column.Label) ? column.Name : column.Label;
         Type = column.Type;
         Required = column.Required;
     }
 
     public string Name { get; }
+    public string Label { get; }
+
+    /// <summary>Подпись в форме: «Название (имя_параметра)».</summary>
+    public string Caption => string.Equals(Label, Name, StringComparison.Ordinal)
+        ? Name
+        : $"{Label} ({Name})";
+
     public string Type { get; }
     public bool Required { get; }
     public ObservableCollection<SourceColumnOption> SourceColumns { get; } = [];

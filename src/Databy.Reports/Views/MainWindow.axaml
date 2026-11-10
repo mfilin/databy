@@ -430,7 +430,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="vm:ColumnMappingViewModel">
                     <StackPanel Spacing="2" Margin="0,0,0,6">
-                      <TextBlock Text="{Binding Name}" Classes="caption" />
+                      <TextBlock Text="{Binding Caption}" Classes="caption" />
                       <ComboBox ItemsSource="{Binding SourceColumns}"
                                 SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
                                 HorizontalAlignment="Stretch" />

@@ -334,7 +334,8 @@ public sealed class ListReportQueryService : IListReportQueryService
     private static bool TryDate(string value, out DateOnly date)
     {
         string[] formats = ["dd.MM.yyyy", "d.M.yyyy", "yyyy-MM-dd"];
-        if (DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        var normalized = value.Trim('\uFEFF', '\u200B', '\u00A0', '\r', '\n', ' ', '\t');
+        if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
             date = DateOnly.FromDateTime(parsed);
             return true;

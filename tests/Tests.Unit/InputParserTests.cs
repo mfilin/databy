@@ -168,7 +168,11 @@ public sealed class InputParserTests
         var progress = new InlineProgress<long>(_ => cts.Cancel());
 
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            new ListInputParser().ParseText(text, new InputParseOptions(), cts.Token, progress));
+                    new ListInputParser().ParseText(text, new InputParseOptions(), cts.Token, progress));
+
+        // Параллельные тесты могут создавать свои stage-файлы; ждём стабилизации счётчика.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (CountStages() > before && DateTime.UtcNow < deadline) Thread.Sleep(20);
         Assert.True(CountStages() <= before, "Stage должен быть удалён при отмене");
     }
 
@@ -220,6 +224,44 @@ public sealed class InputParserTests
         var row = Assert.Single(result.Stage.ReadRows());
         Assert.Equal(" 111 ", row.Cells[0]);
         Assert.Equal("  текст  ", row.Cells[1]);
+        Assert.Equal(0, result.ErrorRows);
+    }
+
+    [Theory]
+    [InlineData("01.10.2026")]
+    [InlineData(" 01.10.2026")]
+    [InlineData("01.10.2026 ")]
+    [InlineData("\uFEFF01.10.2026")]
+    [InlineData("01.10.2026\u00A0")]
+    [InlineData("01.10.2026\r")]
+    public void Ip15_DateAcceptsSurroundingInvisibleCharacters(string date)
+    {
+        using var result = new ListInputParser().ParseText("7707083893\t" + date,
+            new InputParseOptions
+            {
+                Delimiter = InputDelimiter.Tab,
+                Columns = Columns("p_inn:string", "p_dt:date"),
+                ColumnMapping = new Dictionary<string, int> { ["p_inn"] = 0, ["p_dt"] = 1 }
+            });
+
+        Assert.Equal(1, result.TotalRows);
+        Assert.Equal(1, result.ValidRows);
+        Assert.Equal(0, result.ErrorRows);
+    }
+
+    [Fact]
+    public void Ip16_CsvWithCrLfAndDateTailParsesAllRows()
+    {
+        using var result = new ListInputParser().ParseText("7707083893\t01.10.2026\r\n500100732259\t02.10.2026\r\n",
+            new InputParseOptions
+            {
+                Delimiter = InputDelimiter.Tab,
+                Columns = Columns("p_inn:string", "p_dt:date"),
+                ColumnMapping = new Dictionary<string, int> { ["p_inn"] = 0, ["p_dt"] = 1 }
+            });
+
+        Assert.Equal(2, result.TotalRows);
+        Assert.Equal(2, result.ValidRows);
         Assert.Equal(0, result.ErrorRows);
     }
 }

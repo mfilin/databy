@@ -5,6 +5,7 @@ using Databy.Reports.Input;
 
 namespace Tests.Unit;
 
+[Collection("temp-stage")]
 [Trait("Category", "T1")]
 public sealed class InputXlsxTests
 {
