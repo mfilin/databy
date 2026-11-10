@@ -31,7 +31,7 @@ public sealed class TabLoaderTests
             await Task.Delay(100);
             Assert.True(tab.IsLoading);
 
-            window.KeyPress(Key.Escape, RawInputModifiers.None);
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
             for (var i = 0; i < 3; i++) Dispatcher.UIThread.RunJobs();
 
             var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(5))) == run;

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 
 namespace Databy.Reports.Services;
 
@@ -9,7 +10,7 @@ public sealed class AvaloniaClipboardService(TopLevel topLevel) : IClipboardServ
     {
         var clipboard = topLevel.Clipboard;
         if (clipboard is null) return null;
-        var text = await clipboard.GetTextAsync();
+        var text = await clipboard.TryGetTextAsync();
         cancellationToken.ThrowIfCancellationRequested();
         return text;
     }
