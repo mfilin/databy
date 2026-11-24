@@ -250,7 +250,64 @@ public sealed class InputParserTests
     }
 
     [Fact]
-    public void Ip16_CsvWithCrLfAndDateTailParsesAllRows()
+    public void Ip16_StageKeepsSourceHeadersAndResolvedMapping()
+    {
+        using var result = new ListInputParser().ParseText("Комментарий\tИНН\nстрока\t7707083893\n",
+            new InputParseOptions
+            {
+                Delimiter = InputDelimiter.Tab,
+                HasHeader = true,
+                Columns = Columns("p_inn:string"),
+                ColumnMapping = new Dictionary<string, int> { ["p_inn"] = 1 }
+            });
+
+        Assert.Equal(["Комментарий", "ИНН"], result.Stage.SourceColumns);
+        Assert.Equal(1, result.Stage.GetSourceIndex("p_inn"));
+        Assert.Equal(1, result.Stage.TotalRows);
+    }
+
+    [Fact]
+    public void Ip17_StageWithoutMappingReportsClearError()
+    {
+        using var result = new ListInputParser().ParseText("ИНН\n7707083893\n", new InputParseOptions
+        {
+            Columns = Columns("p_inn:string"),
+            ColumnMapping = new Dictionary<string, int> { ["p_inn"] = 0 }
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => result.Stage.GetSourceIndex("p_other"));
+        Assert.Contains("не сохранено сопоставление", error.Message);
+        Assert.DoesNotContain("7707083893", error.Message);
+    }
+
+    [Theory]
+    [InlineData("int", "42")]
+    [InlineData("int", "4.2")]
+    [InlineData("int", "99999999999")]
+    [InlineData("decimal", "1,5")]
+    [InlineData("decimal", "abc")]
+    [InlineData("date", "01.02.2026")]
+    [InlineData("date", "2026-02-01")]
+    [InlineData("date", "not-a-date")]
+    [InlineData("bool", "да")]
+    [InlineData("bool", "1")]
+    [InlineData("bool", "yes")]
+    [InlineData("string", "текст")]
+    public void Ip18_ParserAndInputValueUseTheSameParsingRules(string type, string value)
+    {
+        using var result = new ListInputParser().ParseText(value, new InputParseOptions
+        {
+            Delimiter = InputDelimiter.None,
+            Columns = Columns($"p_value:{type}"),
+            ColumnMapping = new Dictionary<string, int> { ["p_value"] = 0 }
+        });
+
+        var acceptedByInputValue = InputValue.TryParse(value, type, out _);
+        Assert.Equal(acceptedByInputValue, result.ErrorRows == 0);
+    }
+
+    [Fact]
+    public void Ip19_CsvWithCrLfAndDateTailParsesAllRows()
     {
         using var result = new ListInputParser().ParseText("7707083893\t01.10.2026\r\n500100732259\t02.10.2026\r\n",
             new InputParseOptions

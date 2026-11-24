@@ -218,7 +218,9 @@ public sealed partial class ListInputViewModel : ObservableObject, IDisposable
         SourceColumns.Add(new SourceColumnOption("— не выбрано —", null));
         for (var i = 0; i < result.SourceColumns.Count; i++)
             SourceColumns.Add(new SourceColumnOption(result.SourceColumns[i], i));
-        foreach (var column in Columns) column.UpdateSourceColumns(SourceColumns);
+        foreach (var column in Columns)
+            column.UpdateSourceColumns(SourceColumns,
+                result.Stage.ColumnMapping.TryGetValue(column.Name, out var index) ? index : null);
 
         PreviewRows.Clear();
         foreach (var row in result.Preview)
@@ -314,16 +316,16 @@ public sealed partial class ColumnMappingViewModel : ObservableObject
         Changed?.Invoke();
     }
 
-    public void UpdateSourceColumns(IEnumerable<SourceColumnOption> options)
+    public void UpdateSourceColumns(IEnumerable<SourceColumnOption> options, int? selectedIndex = null)
     {
-        var previous = SelectedSource?.Index;
+        var index = selectedIndex ?? SelectedSource?.Index;
         _suppress = true;
         try
         {
             SourceColumns.Clear();
             foreach (var option in options) SourceColumns.Add(option);
-            SelectedSource = previous is { } index
-                ? SourceColumns.FirstOrDefault(option => option.Index == index)
+            SelectedSource = index is { } value
+                ? SourceColumns.FirstOrDefault(option => option.Index == value)
                 : SourceColumns.Count > 1 ? SourceColumns[1] : null;
         }
         finally

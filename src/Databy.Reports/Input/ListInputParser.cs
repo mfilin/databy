@@ -128,13 +128,13 @@ public sealed class ListInputParser
     private InputParseResult ParseRecords(CsvRecordReader csv, List<string>? pending, string[]? header, int sourceColumnCount,
         InputParseOptions options, CancellationToken cancellationToken, IProgress<long>? progress)
     {
-        var stage = new InputStage(InputStage.CreatePath(), sourceColumnCount);
+        var sourceNames = header ?? BuildDefaultNames(sourceColumnCount);
+        var mapped = ResolveMapping(options);
+        var stage = CreateStage(sourceNames, mapped);
         var preview = new List<InputPreviewRow>(Math.Min(options.PreviewSize, 32));
         var errors = new List<InputRowError>(Math.Min(options.MaxErrors, 32));
         long total = 0, valid = 0, errorRows = 0;
         var rowId = 0;
-        var sourceNames = header ?? BuildDefaultNames(sourceColumnCount);
-        var mapped = ResolveMapping(options);
 
         try
         {
@@ -163,6 +163,7 @@ public sealed class ListInputParser
             }
 
             progress?.Report(total);
+            stage.TotalRows = total;
             return new InputParseResult(stage, sourceNames, preview, errors, total, valid, errorRows);
         }
         catch
@@ -205,13 +206,13 @@ public sealed class ListInputParser
             hasRows = reader.Read();
         }
 
-        var stage = new InputStage(InputStage.CreatePath(), width);
+        var sourceNames = header ?? BuildDefaultNames(width);
+        var mapped = ResolveMapping(options);
+        var stage = CreateStage(sourceNames, mapped);
         var preview = new List<InputPreviewRow>(Math.Min(options.PreviewSize, 32));
         var errors = new List<InputRowError>(Math.Min(options.MaxErrors, 32));
         long total = 0, valid = 0, errorRows = 0;
         var rowId = 0;
-        var sourceNames = header ?? BuildDefaultNames(width);
-        var mapped = ResolveMapping(options);
 
         try
         {
@@ -246,6 +247,7 @@ public sealed class ListInputParser
             }
 
             progress?.Report(total);
+            stage.TotalRows = total;
             return new InputParseResult(stage, sourceNames, preview, errors, total, valid, errorRows);
         }
         catch
@@ -254,6 +256,10 @@ public sealed class ListInputParser
             throw;
         }
     }
+
+    private static InputStage CreateStage(string[] sourceNames, (InputColumnDefinition Definition, int Index)[] mapped) =>
+        new(InputStage.CreatePath(), sourceNames,
+            mapped.ToDictionary(pair => pair.Definition.Name, pair => pair.Index, StringComparer.Ordinal));
 
     private static void Count(CellError? error, List<InputRowError> errors, InputParseOptions options, int rowId,
         ref long valid, ref long errorRows, List<InputPreviewRow> preview, string[] cells)

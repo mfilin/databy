@@ -177,6 +177,84 @@ public sealed class ListReportQueryServiceTests(PostgresFixture fixture)
         Assert.True(stopwatch.Elapsed < TimeSpan.FromMinutes(3), $"Обработка 100 000 строк заняла {stopwatch.Elapsed}");
     }
 
+    [Fact]
+    public async Task Ls12_MappedSourceColumnsAreSentAndHeadersKept()
+    {
+        var report = Load("list_by_inn_date.yml");
+        using var input = InputText(
+            "Комментарий\tИНН\tДата\nстрока\t7707083893\t01.01.2026\nдругая\t500100732259\t01.01.2027\n",
+            [new() { Name = "p_inn", Type = "string" }, new() { Name = "p_dt", Type = "date" }],
+            new() { ["p_inn"] = 1, ["p_dt"] = 2 }, hasHeader: true, InputDelimiter.Tab);
+        using var service = new ServiceScope(fixture);
+
+        var result = await service.ExecuteAsync(report, Parameters("2026-06-01"), input.Stage);
+        var rows = ReadResult(result);
+
+        Assert.Equal(["Комментарий", "ИНН", "Дата", "inn", "name", "Статус поиска"],
+            result.Preview.Table.Columns.Cast<System.Data.DataColumn>().Select(column => column.ColumnName));
+        Assert.Equal("строка", rows[0][0]);
+        Assert.Equal("7707083893", rows[0][1]);
+        Assert.Equal("7707083893", rows[0][3]);
+        Assert.Equal("Найдено", rows[0][^1]);
+        Assert.Equal("Не найдено", rows[1][^1]);
+    }
+
+    [Fact]
+    public async Task Ls13_ReverseColumnOrderRelativeToYaml()
+    {
+        var report = Load("list_by_inn_date.yml");
+        using var input = InputText(
+            "Дата\tКомментарий\tИНН\n01.01.2026\tстрока\t7707083893\n",
+            [new() { Name = "p_inn", Type = "string" }, new() { Name = "p_dt", Type = "date" }],
+            new() { ["p_inn"] = 2, ["p_dt"] = 0 }, hasHeader: true, InputDelimiter.Tab);
+        using var service = new ServiceScope(fixture);
+
+        var result = await service.ExecuteAsync(report, Parameters("2026-06-01"), input.Stage);
+        var rows = ReadResult(result);
+
+        Assert.Equal(["Дата", "Комментарий", "ИНН", "inn", "name", "Статус поиска"],
+            result.Preview.Table.Columns.Cast<System.Data.DataColumn>().Select(column => column.ColumnName));
+        Assert.Equal("7707083893", rows[0][2]);
+        Assert.Equal("7707083893", rows[0][3]);
+        Assert.Equal("Найдено", rows[0][^1]);
+    }
+
+    [Fact]
+    public async Task Ls14_EmptyOptionalStringIsSentAsNull()
+    {
+        var report = Load("list_null_note.yml");
+        using var input = InputText(
+            "7707083893\t\n",
+            [new() { Name = "p_inn", Type = "string" }, new() { Name = "p_note", Type = "string", Required = false }],
+            new() { ["p_inn"] = 0, ["p_note"] = 1 }, hasHeader: false, InputDelimiter.Tab);
+        using var service = new ServiceScope(fixture);
+
+        var result = await service.ExecuteAsync(report, Parameters(), input.Stage);
+        var rows = ReadResult(result);
+
+        Assert.Equal("True", rows[0][3]);
+        Assert.Equal("Найдено", rows[0][^1]);
+    }
+
+    [Fact]
+    public async Task Ls15_NoHeaderUsesGeneratedSourceNames()
+    {
+        var report = Load("list_by_inn.yml");
+        using var input = InputText(
+            "7707083893\n",
+            [new() { Name = "p_inn", Type = "string" }],
+            new() { ["p_inn"] = 0 }, hasHeader: false, InputDelimiter.None);
+        using var service = new ServiceScope(fixture);
+
+        var result = await service.ExecuteAsync(report, Parameters("2026-01-01"), input.Stage);
+        var rows = ReadResult(result);
+
+        Assert.Equal(["Колонка 1", "inn", "name", "city", "Статус поиска"],
+            result.Preview.Table.Columns.Cast<System.Data.DataColumn>().Select(column => column.ColumnName));
+        Assert.Equal("7707083893", rows[0][0]);
+        Assert.Equal("Найдено", rows[0][^1]);
+    }
+
     private ReportDefinition Load(string file) => LoadWithBatch(file, batchSize: null);
 
     private ReportDefinition LoadWithBatch(string file, int? batchSize)
@@ -221,6 +299,20 @@ public sealed class ListReportQueryServiceTests(PostgresFixture fixture)
         var parse = new ListInputParser().ParseText(text.ToString(), new InputParseOptions
         {
             Delimiter = dates is null ? InputDelimiter.None : InputDelimiter.Tab,
+            Columns = columns,
+            ColumnMapping = mapping,
+            MaxRows = 1_000_000
+        });
+        return new InputScope(parse);
+    }
+
+    private static InputScope InputText(string text, List<InputColumnDefinition> columns,
+        Dictionary<string, int> mapping, bool hasHeader, InputDelimiter delimiter)
+    {
+        var parse = new ListInputParser().ParseText(text, new InputParseOptions
+        {
+            Delimiter = delimiter,
+            HasHeader = hasHeader,
             Columns = columns,
             ColumnMapping = mapping,
             MaxRows = 1_000_000

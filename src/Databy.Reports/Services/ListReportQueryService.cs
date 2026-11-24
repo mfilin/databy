@@ -37,13 +37,16 @@ public sealed class ListReportQueryService : IListReportQueryService
 
         try
         {
-            total = CountRows(input);
+            total = input.TotalRows;
             await using var connection = new NpgsqlConnection(_settings.ConnectionString);
             await connection.OpenAsync(cancellationToken);
             var arguments = await RoutineCatalog.LoadArgumentsAsync(connection, report, cancellationToken);
             ValidateContract(report, definition, arguments);
 
-            var sourceColumns = Enumerable.Range(1, input.SourceColumnCount).Select(index => "Колонка " + index).ToArray();
+            var sourceColumns = input.SourceColumns.ToArray();
+            if (sourceColumns.Length == 0)
+                throw new InvalidOperationException(
+                    "Временный файл списка не содержит сведений о колонках источника. Загрузите список значений заново.");
             var merger = new ResultMerger(sourceColumns, []);
             var schemaKnown = false;
             var batchNumber = 0;
@@ -70,7 +73,7 @@ public sealed class ListReportQueryService : IListReportQueryService
 
                 if (!schemaKnown)
                 {
-                    var empty = await QueryBatchAsync(connection, report, definition, parameters, [], 1, cancellationToken);
+                    var empty = await QueryBatchAsync(connection, report, definition, input, parameters, [], 1, cancellationToken);
                     merger = new ResultMerger(sourceColumns, empty.Columns);
                     WriteHeader();
                     AddColumns(empty.Columns);
@@ -86,7 +89,7 @@ public sealed class ListReportQueryService : IListReportQueryService
                 async Task FlushBatchAsync(List<InputRow> rows, int number)
                 {
                     var valid = rows.Where(row => row.Error is null).ToArray();
-                    var database = await QueryBatchAsync(connection, report, definition, parameters, valid, number, cancellationToken);
+                    var database = await QueryBatchAsync(connection, report, definition, input, parameters, valid, number, cancellationToken);
                     if (!schemaKnown)
                     {
                         merger = new ResultMerger(sourceColumns, database.Columns);
@@ -174,11 +177,11 @@ public sealed class ListReportQueryService : IListReportQueryService
     }
 
     private async Task<BatchRows> QueryBatchAsync(NpgsqlConnection connection, ReportDefinition report,
-        InputDefinition definition, IReadOnlyDictionary<string, object?> parameters,
+        InputDefinition definition, InputStage stage, IReadOnlyDictionary<string, object?> parameters,
         IReadOnlyList<InputRow> rows, int batchNumber, CancellationToken cancellationToken)
     {
         var routineCommand = PostgresReportQueryService.BuildCommand(report, parameters);
-        var arrays = BuildArrays(definition, rows).ToArray();
+        var arrays = BuildArrays(definition, stage, rows).ToArray();
         var names = new List<string>();
         foreach (var parameter in report.Parameters) names.Add($"{parameter.Name} => @{parameter.Name}");
         names.Add($"{definition.RowIdParameter} => @{definition.RowIdParameter}");
@@ -226,29 +229,47 @@ public sealed class ListReportQueryService : IListReportQueryService
     }
 
     private static IEnumerable<(string Name, NpgsqlDbType Type, object Value)> BuildArrays(
-        InputDefinition definition, IReadOnlyList<InputRow> rows)
+        InputDefinition definition, InputStage stage, IReadOnlyList<InputRow> rows)
     {
         yield return (definition.RowIdParameter, NpgsqlDbType.Array | NpgsqlDbType.Integer,
             rows.Select(row => row.RowId).ToArray());
 
-        for (var c = 0; c < definition.Columns.Count; c++)
+        foreach (var column in definition.Columns)
         {
-            var type = definition.Columns[c].Type.ToLowerInvariant();
-            var index = c;
+            // Индекс берётся из сохранённого сопоставления, а не из порядка колонок в YAML.
+            var index = stage.GetSourceIndex(column.Name);
+            var type = column.Type.ToLowerInvariant();
             object value = type switch
             {
-                "string" => rows.Select(row => index < row.Cells.Count ? row.Cells[index] : "").ToArray(),
-                "int" => rows.Select(row => int.TryParse(Cell(row, index), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : (int?)null).ToArray(),
-                "decimal" => rows.Select(row => decimal.TryParse(Cell(row, index).Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed) ? parsed : (decimal?)null).ToArray(),
-                "date" => rows.Select(row => TryDate(Cell(row, index), out var parsed) ? parsed : (DateOnly?)null).ToArray(),
-                "bool" => rows.Select(row => TryBool(Cell(row, index), out var parsed) ? parsed : (bool?)null).ToArray(),
-                _ => throw new NotSupportedException($"Тип колонки '{definition.Columns[c].Type}' не поддерживается")
+                "string" => rows.Select(row => CellOrNull(row, index)).ToArray(),
+                "int" => rows.Select(row => Parse<int>(row, index, column)).ToArray(),
+                "decimal" => rows.Select(row => Parse<decimal>(row, index, column)).ToArray(),
+                "date" => rows.Select(row => Parse<DateOnly>(row, index, column)).ToArray(),
+                "bool" => rows.Select(row => Parse<bool>(row, index, column)).ToArray(),
+                _ => throw new NotSupportedException($"Тип колонки '{column.Type}' не поддерживается")
             };
-            yield return (definition.Columns[c].Name, ArrayTypeOf(type), value);
+            yield return (column.Name, ArrayTypeOf(type), value);
         }
     }
 
     private static string Cell(InputRow row, int index) => index < row.Cells.Count ? row.Cells[index] : "";
+
+    /// <summary>Пустое значение, включая строку, уходит в БД как NULL.</summary>
+    private static string? CellOrNull(InputRow row, int index)
+    {
+        var value = Cell(row, index);
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>Разбор значения теми же правилами, что и при проверке списка.</summary>
+    private static T? Parse<T>(InputRow row, int index, InputColumnDefinition column) where T : struct
+    {
+        var value = Cell(row, index);
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (InputValue.TryParse(value, column.Type, out var parsed) && parsed is T typed) return typed;
+        throw new InvalidOperationException(
+            $"Не удалось разобрать значение ключевой колонки '{column.Name}' как {column.Type}.");
+    }
 
     private static string[] ScalarType(string type) => type.ToLowerInvariant() switch
     {
@@ -279,13 +300,6 @@ public sealed class ListReportQueryService : IListReportQueryService
         "bool" => NpgsqlDbType.Array | NpgsqlDbType.Boolean,
         _ => throw new NotSupportedException($"Тип колонки '{type}' не поддерживается")
     };
-
-    private static long CountRows(InputStage input)
-    {
-        long count = 0;
-        foreach (var _ in input.ReadRows()) count++;
-        return count;
-    }
 
     /// <summary>Делит CSV-поток на записи с учётом кавычек и переводов строк внутри значений.</summary>
     private static IEnumerable<string> SplitRecords(string text)
@@ -329,29 +343,6 @@ public sealed class ListReportQueryService : IListReportQueryService
         }
         fields.Add(builder.ToString());
         return fields.ToArray();
-    }
-
-    private static bool TryDate(string value, out DateOnly date)
-    {
-        string[] formats = ["dd.MM.yyyy", "d.M.yyyy", "yyyy-MM-dd"];
-        var normalized = value.Trim('\uFEFF', '\u200B', '\u00A0', '\r', '\n', ' ', '\t');
-        if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-        {
-            date = DateOnly.FromDateTime(parsed);
-            return true;
-        }
-        date = default;
-        return false;
-    }
-
-    private static bool TryBool(string value, out bool flag)
-    {
-        switch (value.Trim().ToLowerInvariant())
-        {
-            case "true" or "1" or "да": flag = true; return true;
-            case "false" or "0" or "нет": flag = false; return true;
-            default: flag = false; return false;
-        }
     }
 
     private sealed record BatchRows(string[] Columns, IReadOnlyList<BatchRow> Rows);

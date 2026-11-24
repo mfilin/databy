@@ -151,6 +151,24 @@ public sealed class ListInputPanelTests
         Assert.True(panel.IsReady);
     }
 
+    [Fact]
+    public async Task Li09_DefaultMappingOfEachColumnMatchesStage()
+    {
+        var clipboard = new StubClipboard("Комментарий\tИНН\tДата\nстрока\t7707083893\t2026-01-01");
+        using var viewModel = Create(listInput: true, clipboard: clipboard, typedDate: true);
+        var panel = viewModel.SelectedListInput!;
+        await panel.PasteCommand.ExecuteAsync(null);
+
+        panel.FirstRowIsHeader = true;
+        await panel.PendingReparse.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(panel.Stage);
+        Assert.Equal(panel.Stage!.ColumnMapping["p_inn"], panel.Columns[0].SelectedSource!.Index);
+        Assert.Equal(panel.Stage!.ColumnMapping["p_dt"], panel.Columns[1].SelectedSource!.Index);
+        Assert.Equal(0, panel.Columns[0].SelectedSource!.Index);
+        Assert.Equal(1, panel.Columns[1].SelectedSource!.Index);
+    }
+
     private static async Task WaitUntil(Func<bool> condition, int timeoutMs = 10_000)
     {
         var stopwatch = Stopwatch.StartNew();

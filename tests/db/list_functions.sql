@@ -110,6 +110,15 @@ LANGUAGE sql STABLE AS $$
  ORDER BY r.rid
 $$;
 
+-- Пустое необязательное строковое значение должно прийти как NULL.
+CREATE OR REPLACE FUNCTION lst.null_note(p_inn text[], p_note text[], p_row_id int[])
+RETURNS TABLE(inn text, note_is_null boolean, row_id int)
+LANGUAGE sql STABLE AS $$
+ SELECT r.inn, r.note IS NULL, r.rid
+ FROM unnest(p_inn, p_note, p_row_id) AS r(inn, note, rid)
+ ORDER BY r.rid
+$$;
+
 -- Пример из catalog/sales/sales_by_cities.yml: продажи по списку городов.
 CREATE OR REPLACE FUNCTION reports.fn_sales_by_cities(p_city text[], p_row_id int[], p_from date, p_to date)
 RETURNS TABLE(region text, sold_at date, product text, quantity integer, total numeric, status text, row_id int)

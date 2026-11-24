@@ -1,0 +1,13 @@
+code: lst.null_note
+title: Пустое необязательное значение
+routine:
+  name: lst.null_note
+  kind: function
+  timeout_sec: 60
+input:
+  row_id_parameter: p_row_id
+  result_key: row_id
+  columns:
+    - { name: p_inn, type: string, label: ИНН }
+    - { name: p_note, type: string, label: Примечание, required: false }
+roles: [admin, user]
