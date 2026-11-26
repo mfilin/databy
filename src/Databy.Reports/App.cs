@@ -29,6 +29,14 @@ public sealed class App : Application
             Services = ServiceRegistration.BuildServiceProvider();
             var viewModel = Services.GetRequiredService<MainWindowViewModel>();
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
+            desktop.Exit += (_, _) =>
+            {
+                try { viewModel.Dispose(); }
+                catch (Exception)
+                {
+                    // Выход из приложения не должен падать из-за очистки временных файлов.
+                }
+            };
         }
         base.OnFrameworkInitializationCompleted();
     }
