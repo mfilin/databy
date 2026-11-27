@@ -13,7 +13,7 @@ public sealed class ReportCatalogLoader
     private static readonly HashSet<string> ParameterTypes = new(StringComparer.OrdinalIgnoreCase)
         { "date", "daterange", "int", "decimal", "string", "bool", "lookup" };
     private static readonly HashSet<string> UnsupportedTypes = new(StringComparer.OrdinalIgnoreCase) { "daterange", "lookup" };
-    private static readonly HashSet<string> RoutineKinds = new(StringComparer.OrdinalIgnoreCase) { "function" };
+    private static readonly HashSet<string> RoutineKinds = new(StringComparer.OrdinalIgnoreCase) { "function", "query" };
     private static readonly HashSet<string> Roles = new(StringComparer.OrdinalIgnoreCase) { "admin", "user" };
     private static readonly HashSet<string> InputColumnTypes = new(StringComparer.OrdinalIgnoreCase) { "string", "int", "decimal", "date", "bool" };
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
@@ -32,7 +32,7 @@ public sealed class ReportCatalogLoader
             ReportDefinition? report;
             try { report = _deserializer.Deserialize<ReportDefinition>(File.ReadAllText(file)); }
             catch (Exception ex) { errors.Add(new(file, ex.Message)); continue; }
-            var issue = Validate(report);
+            var issue = Validate(report, path);
             if (issue is not null) { errors.Add(new(file, issue)); continue; }
             if (!codes.Add(report!.Code)) { errors.Add(new(file, $"Повторяется code '{report.Code}'")); continue; }
             reports.Add(report);
@@ -48,15 +48,40 @@ public sealed class ReportCatalogLoader
         return new(File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : "не указана", reports, errors, folders.ToArray());
     }
 
-    private static string? Validate(ReportDefinition? report)
+    private static string? Validate(ReportDefinition? report, string catalogRoot)
     {
         if (report is null) return "Файл YAML пуст";
         if (string.IsNullOrWhiteSpace(report.Code)) return "Не задан code";
         if (string.IsNullOrWhiteSpace(report.Title)) return "Не задан title";
-        if (report.Routine is null || string.IsNullOrWhiteSpace(report.Routine.Name)) return "Не задан routine.name";
-        if (!Regex.IsMatch(report.Routine.Name, @"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$")) return "routine.name должен иметь вид schema.function";
-        if (!RoutineKinds.Contains(report.Routine.Kind)) return $"routine.kind '{report.Routine.Kind}' пока не поддерживается (допустимо: function)";
-        if (report.Routine.TimeoutSec <= 0) return $"routine.timeout_sec должен быть больше нуля (сейчас {report.Routine.TimeoutSec})";
+        if (report.Routine is null) return "Не задан routine";
+
+        var kind = report.Routine.Kind?.Trim() ?? "";
+        if (!RoutineKinds.Contains(kind))
+            return $"routine.kind '{report.Routine.Kind}' пока не поддерживается (допустимо: function, query)";
+        if (report.Routine.TimeoutSec <= 0)
+            return $"routine.timeout_sec должен быть больше нуля (сейчас {report.Routine.TimeoutSec})";
+
+        if (string.Equals(kind, "function", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(report.Routine.Name)) return "Не задан routine.name";
+            if (!Regex.IsMatch(report.Routine.Name, @"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$"))
+                return "routine.name должен иметь вид schema.function";
+            if (!string.IsNullOrWhiteSpace(report.Routine.File))
+                return "routine.file допустим только для kind: query";
+        }
+        else if (string.IsNullOrWhiteSpace(report.Routine.File))
+        {
+            return "Не задан routine.file для kind: query";
+        }
+
+        if (report.Source is not null)
+        {
+            var source = report.Source.Trim();
+            if (source.Length == 0) return "source не должен быть пустым";
+            if (!Regex.IsMatch(source, @"^[a-zA-Z_][a-zA-Z0-9_.-]*$"))
+                return $"Недопустимое имя подключения source '{report.Source}'";
+            report.Source = source;
+        }
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var parameter in report.Parameters)
@@ -65,6 +90,14 @@ public sealed class ReportCatalogLoader
             if (!names.Add(parameter.Name)) return $"Повторяется имя параметра '{parameter.Name}'";
             if (UnsupportedTypes.Contains(parameter.Type)) return $"Тип параметра '{parameter.Type}' пока не поддерживается";
             if (!ParameterTypes.Contains(parameter.Type)) return $"Неизвестный тип параметра '{parameter.Type}'";
+            if (!string.IsNullOrWhiteSpace(parameter.DbType))
+            {
+                if (!string.Equals(kind, "query", StringComparison.OrdinalIgnoreCase))
+                    return $"db_type допустим только для kind: query (параметр '{parameter.Name}')";
+
+                var typeIssue = ClickHouseTypeRules.ValidateParameter(parameter, out _);
+                if (typeIssue is not null) return typeIssue;
+            }
         }
 
         foreach (var parameter in report.Parameters)
@@ -80,8 +113,41 @@ public sealed class ReportCatalogLoader
         if (inputIssue is not null) return inputIssue;
 
         var invalidRole = report.Roles.FirstOrDefault(role => !Roles.Contains(role));
-        return invalidRole is null ? null : $"Недопустимая роль '{invalidRole}'";
+        if (invalidRole is not null) return $"Недопустимая роль '{invalidRole}'";
+
+        if (!string.Equals(kind, "query", StringComparison.OrdinalIgnoreCase)) return null;
+
+        return LoadAndValidateScript(report, catalogRoot);
     }
+
+    private static string? LoadAndValidateScript(ReportDefinition report, string catalogRoot)
+    {
+        SqlScript script;
+        try
+        {
+            script = SqlFileLoader.Load(catalogRoot, report.Routine.File!);
+        }
+        catch (Exception exception) when (exception is SqlFileException or IOException
+                                              or UnauthorizedAccessException or ArgumentException
+                                              or NotSupportedException)
+        {
+            return $"SQL-файл: {exception.Message}";
+        }
+
+        report.Script = script;
+
+        var issues = SqlValidator.Validate(script.Text, report.Parameters, report.Input is not null);
+        if (issues.Count == 0) return null;
+
+        var text = string.Join("; ", issues.Take(5).Select(Describe));
+        if (issues.Count > 5) text += $"; и ещё {issues.Count - 5}";
+        return $"SQL-файл '{script.RelativePath}': {text}";
+    }
+
+    private static string Describe(SqlValidationIssue issue) =>
+        issue.Line > 0
+            ? $"{issue.Message} (строка {issue.Line}, позиция {issue.Column})"
+            : issue.Message;
 
     private static string? ValidateInput(ReportDefinition report)
     {
@@ -147,15 +213,35 @@ public sealed class ReportDefinition
 {
     public string Code { get; set; } = "";
     public string Title { get; set; } = "";
+    public string? Source { get; set; }
     public RoutineDefinition Routine { get; set; } = new();
     public List<ParameterDefinition> Parameters { get; set; } = [];
     public ResultDefinition? Result { get; set; }
     public InputDefinition? Input { get; set; }
     public List<string> Roles { get; set; } = [];
+
+    /// <summary>Результат проверки SQL-файла; не читается из YAML.</summary>
+    [YamlIgnore]
+    public SqlScript? Script { get; set; }
+
     public override string ToString() => Title;
 }
-public sealed class RoutineDefinition { public string Name { get; set; } = ""; public string Kind { get; set; } = "function"; public int TimeoutSec { get; set; } = 60; }
-public sealed class ParameterDefinition { public string Name { get; set; } = ""; public string Type { get; set; } = ""; public string Label { get; set; } = ""; public bool Required { get; set; } public string? Default { get; set; } }
+public sealed class RoutineDefinition
+{
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "function";
+    public string? File { get; set; }
+    public int TimeoutSec { get; set; } = 60;
+}
+public sealed class ParameterDefinition
+{
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string? DbType { get; set; }
+    public string Label { get; set; } = "";
+    public bool Required { get; set; }
+    public string? Default { get; set; }
+}
 public sealed class ResultDefinition
 {
     public string? Sheet { get; set; }

@@ -26,6 +26,10 @@ public sealed class ListReportQueryService : IListReportQueryService
         IProgress<ListQueryProgress>? progress,
         CancellationToken cancellationToken)
     {
+        if (!string.Equals(report.Routine.Kind, "function", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Выполнение отчётов по списку с routine.kind '{report.Routine.Kind}' пока не поддерживается");
+
         var definition = report.Input ?? throw new InvalidOperationException(
             $"Отчёт {report.Code} не описывает список значений (секция input)");
 

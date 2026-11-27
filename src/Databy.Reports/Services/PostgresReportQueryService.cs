@@ -64,10 +64,11 @@ public sealed partial class PostgresReportQueryService : IReportQueryService
 
     public static RoutineCommand BuildCommand(ReportDefinition report, IReadOnlyDictionary<string, object?> values)
     {
+        if (!string.Equals(report.Routine.Kind, "function", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Выполнение отчётов routine.kind '{report.Routine.Kind}' пока не поддерживается");
         if (!RoutineNamePattern().IsMatch(report.Routine.Name))
             throw new InvalidOperationException("Недопустимое имя функции в каталоге");
-        if (!string.Equals(report.Routine.Kind, "function", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"routine.kind '{report.Routine.Kind}' пока не поддерживается");
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var names = new List<string>();

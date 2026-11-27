@@ -14,9 +14,19 @@ public sealed class SerilogReportAuditService : IReportAuditService
 
     private ILogger Audit => Log.ForContext("Audit", true).ForContext("User", _userName);
 
-    public void ReportStarted(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters) =>
+    public void ReportStarted(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters)
+    {
+        if (report.Script is { } script)
+        {
+            Audit.Information(
+                "Report started: {ReportCode} ({ReportTitle}); sqlFile={SqlFile}; sqlHash={SqlHash}; parameters: {Parameters}",
+                report.Code, report.Title, script.RelativePath, script.Hash, FormatParameters(parameters));
+            return;
+        }
+
         Audit.Information("Report started: {ReportCode} ({ReportTitle}); parameters: {Parameters}",
             report.Code, report.Title, FormatParameters(parameters));
+    }
 
     public void ReportSucceeded(ReportDefinition report, long rowCount, long durationMs) =>
         Audit.Information("Report succeeded: {ReportCode}; rows={RowCount}; durationMs={DurationMs}",
