@@ -407,6 +407,7 @@ public sealed class MainWindowViewModelTests
 }
 
 [Trait("Category", "T1")]
+[Collection("settings-env")]
 public sealed class ApplicationSettingsTests
 {
     [Fact]
@@ -428,6 +429,7 @@ public sealed class ApplicationSettingsTests
     {
         using var dir = new TempDirectory();
         using var env = new EnvironmentVariableScope(ApplicationSettings.ConnectionVariable, null);
+        using var mainEnv = new EnvironmentVariableScope("DATABY_CONNECTION_MAIN", null);
         File.WriteAllText(Path.Combine(dir.Path, "appsettings.local.json"),
             "{\"ConnectionString\": \"Host=db.example;Database=reports\"}", new UTF8Encoding(false));
 
@@ -443,6 +445,7 @@ public sealed class ApplicationSettingsTests
         File.WriteAllText(Path.Combine(dir.Path, "appsettings.local.json"),
             "{\"ConnectionString\": \"Host=file;Database=x\"}", new UTF8Encoding(false));
         using var env = new EnvironmentVariableScope(ApplicationSettings.ConnectionVariable, "Host=env;Database=y");
+        using var mainEnv = new EnvironmentVariableScope("DATABY_CONNECTION_MAIN", null);
 
         var settings = new ApplicationSettings(dir.Path);
 
