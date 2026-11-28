@@ -54,11 +54,34 @@ public sealed class PostgresFixture : IAsyncLifetime
 }
 
 /// <summary>Настройки для тестов: строка подключения из контейнера, без env и appsettings.</summary>
-public sealed class TestApplicationSettings(string connectionString, string catalogRoot, string logDirectory) : IApplicationSettings
+public sealed class TestApplicationSettings : IApplicationSettings
 {
-    public string ConnectionString { get; } = connectionString;
-    public string CatalogRoot { get; } = catalogRoot;
-    public string LogDirectory { get; } = logDirectory;
+    private readonly ConnectionSettings _connection;
+    private readonly IReadOnlyDictionary<string, ConnectionSettings> _connections;
+
+    public TestApplicationSettings(string connectionString, string catalogRoot, string logDirectory)
+    {
+        _connection = new ConnectionSettings("main", ConnectionTypes.Postgres, connectionString);
+        _connections = new System.Collections.ObjectModel.ReadOnlyDictionary<string, ConnectionSettings>(
+            new Dictionary<string, ConnectionSettings>(StringComparer.OrdinalIgnoreCase) { ["main"] = _connection });
+        CatalogRoot = catalogRoot;
+        LogDirectory = logDirectory;
+    }
+
+    public string ConnectionString => _connection.ConnectionString;
+    public IReadOnlyDictionary<string, ConnectionSettings> Connections => _connections;
+    public string DefaultConnectionName => "main";
+
+    public ConnectionSettings GetConnection(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Equals("main", StringComparison.OrdinalIgnoreCase))
+            return _connection;
+        throw new InvalidOperationException(
+            $"Подключение '{name}' не настроено. Известные подключения: main.");
+    }
+
+    public string CatalogRoot { get; }
+    public string LogDirectory { get; }
 }
 
 [CollectionDefinition(Name)]

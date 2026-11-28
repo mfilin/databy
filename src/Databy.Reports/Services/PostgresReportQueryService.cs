@@ -18,8 +18,9 @@ public sealed partial class PostgresReportQueryService : IReportQueryService
     public async Task<ReportQueryResult> ExecuteAsync(ReportDefinition report, IReadOnlyDictionary<string, object?> parameters, CancellationToken cancellationToken = default)
     {
         var routineCommand = BuildCommand(report, parameters);
+        var connectionSettings = ConnectionFor(report);
 
-        await using var connection = new NpgsqlConnection(_settings.ConnectionString);
+        await using var connection = new NpgsqlConnection(connectionSettings.ConnectionString);
         await connection.OpenAsync(cancellationToken);
         await EnsureRoutineExistsAsync(connection, report, cancellationToken);
 
@@ -60,6 +61,19 @@ public sealed partial class PostgresReportQueryService : IReportQueryService
             staged.Dispose();
             throw;
         }
+    }
+
+    private ConnectionSettings ConnectionFor(ReportDefinition report)
+    {
+        var connection = _settings.GetConnection(report.Source);
+        if (!string.Equals(connection.Type, ConnectionTypes.Postgres, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Отчёт '{report.Code}' использует подключение '{connection.Name}' типа " +
+                $"'{connection.Type}', которое пока не поддерживается");
+        }
+
+        return connection;
     }
 
     public static RoutineCommand BuildCommand(ReportDefinition report, IReadOnlyDictionary<string, object?> values)

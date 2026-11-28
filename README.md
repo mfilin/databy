@@ -29,27 +29,60 @@ sudo apt-get install -y libx11-6 libice6 libsm6 libfontconfig1 libfreetype6 \
 
 1. Опубликуйте сборку (см. «Публикация») или распакуйте готовый архив.
 2. Скопируйте содержимое `publish/<rid>` в выбранный каталог.
-3. При необходимости создайте рядом с исполняемым файлом `appsettings.local.json` (см. «Настройка подключения»).
+3. При необходимости создайте рядом с исполняемым файлом `appsettings.local.json` (см. «Подключения»).
 4. Запустите `Databy.Reports.exe` (Windows) или `./Databy.Reports` (Linux).
 
 Обновление: остановите приложение, замените файлы сборки, сохранив `logs/`, `appsettings.local.json` и `catalog/`.
 
-## Настройка подключения
+## Подключения
 
-Строка подключения берётся в следующем порядке:
-
-1. Переменная окружения `DATABY_CONNECTION`.
-2. Файл `appsettings.local.json` в каталоге приложения (`AppContext.BaseDirectory`):
-   - для установленной программы — рядом с исполняемым файлом, например `%LOCALAPPDATA%\Programs\Databy\appsettings.local.json` или `~/Databy/appsettings.local.json`;
-   - при `dotnet run`/`dotnet build` — в каталоге сборки: `build/Databy.Reports/Debug/net8.0/appsettings.local.json`. Файл копируется туда из `src/Databy.Reports/appsettings.local.json` (исключён из Git).
-
-Пример:
+Приложение поддерживает несколько именованных подключений. Они описываются в `appsettings.local.json` рядом с исполняемым файлом (`AppContext.BaseDirectory`):
 
 ```json
 {
-  "ConnectionString": "Host=localhost;Port=5432;Database=db1;Username=db1;Password=..."
+  "Connections": {
+    "main": {
+      "Type": "postgres",
+      "ConnectionString": "Host=localhost;Port=5432;Database=db1;Username=db1;Password=..."
+    },
+    "ch": {
+      "Type": "clickhouse",
+      "ConnectionString": "Host=localhost;Port=8123;Protocol=http;Database=default;Username=default;Password=..."
+    }
+  },
+  "DefaultConnection": "main"
 }
 ```
+
+- `Type` и `ConnectionString` обязательны для каждого подключения.
+- `Type` сравнивается без учёта регистра, допустимы `postgres` и `clickhouse`.
+- Имя подключения начинается с буквы и содержит только буквы, цифры, `_` и `-`; имена сравниваются без учёта регистра.
+- `DefaultConnection` задаёт подключение по умолчанию. Если он не указан, используется `main`, иначе единственное подключение. Если подключений несколько и `main` среди них нет, при запуске отчёта появится ошибка «Не задано подключение по умолчанию».
+- Отчёт выбирает подключение через `source` в YAML; без `source` используется подключение по умолчанию. `source` — имя из секции `Connections` (без учёта регистра). Неизвестный `source` завершается ошибкой со списком известных имён.
+- ClickHouse-подключение пока можно только описать: выполнение отчёта с таким `source` завершается ошибкой «пока не поддерживается».
+
+### Переменные окружения
+
+Приоритет (сверху вниз):
+
+1. `DATABY_CONNECTION_<ИМЯ>` — строка подключения для уже описанного подключения. Имя переводится в верхний регистр, все символы кроме букв и цифр заменяются на `_`: для `ch-main` это `DATABY_CONNECTION_CH_MAIN`. Тип берётся из файла. Для неописанного подключения переменная игнорируется.
+2. `DATABY_CONNECTION` — строка подключения по умолчанию. Если в файле подключения по умолчанию нет, создаётся `main` типа `postgres`.
+3. Значение из `appsettings.local.json`.
+
+Если два имени после нормализации дают одну переменную (`a-b` и `a_b`), загрузка настроек завершается ошибкой.
+
+### Совместимость со старой настройкой
+
+Старое поле `ConnectionString` в `appsettings.local.json` и переменная `DATABY_CONNECTION` описывают подключение `main` типа `postgres`. Если в `Connections` уже есть `main`, старое поле на него не влияет. Старые установки продолжают работать без изменений.
+
+Строки подключения и пароли никогда не попадают в логи, сообщения об ошибках и `ToString()`.
+
+Примеры сообщений:
+
+- `Подключение 'ch2' не настроено. Известные подключения: main, ch. Опишите его в секции Connections ... или задайте строку в переменной DATABY_CONNECTION_CH2.`
+- `Отчёт 'finance.revenue' использует подключение 'ch' типа 'clickhouse', которое пока не поддерживается.`
+
+При `dotnet run`/`dotnet build` файл `appsettings.local.json` читается из каталога сборки (`build/Databy.Reports/Debug/net8.0/`); он копируется туда из `src/Databy.Reports/appsettings.local.json` (файл исключён из Git).
 
 Демо-данные (если база пустая):
 

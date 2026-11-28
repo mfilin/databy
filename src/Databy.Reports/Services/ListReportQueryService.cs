@@ -30,6 +30,8 @@ public sealed class ListReportQueryService : IListReportQueryService
             throw new InvalidOperationException(
                 $"Выполнение отчётов по списку с routine.kind '{report.Routine.Kind}' пока не поддерживается");
 
+        var connectionSettings = ConnectionFor(report);
+
         var definition = report.Input ?? throw new InvalidOperationException(
             $"Отчёт {report.Code} не описывает список значений (секция input)");
 
@@ -42,7 +44,7 @@ public sealed class ListReportQueryService : IListReportQueryService
         try
         {
             total = input.TotalRows;
-            await using var connection = new NpgsqlConnection(_settings.ConnectionString);
+            await using var connection = new NpgsqlConnection(connectionSettings.ConnectionString);
             await connection.OpenAsync(cancellationToken);
             var arguments = await RoutineCatalog.LoadArgumentsAsync(connection, report, cancellationToken);
             ValidateContract(report, definition, arguments);
@@ -145,6 +147,19 @@ public sealed class ListReportQueryService : IListReportQueryService
             staged.Dispose();
             throw;
         }
+    }
+
+    private ConnectionSettings ConnectionFor(ReportDefinition report)
+    {
+        var connection = _settings.GetConnection(report.Source);
+        if (!string.Equals(connection.Type, ConnectionTypes.Postgres, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Отчёт '{report.Code}' использует подключение '{connection.Name}' типа " +
+                $"'{connection.Type}', которое пока не поддерживается");
+        }
+
+        return connection;
     }
 
     private static void ValidateContract(ReportDefinition report, InputDefinition definition,
